@@ -19,10 +19,10 @@ class RegisterRequest(BaseModel):
     """Dados para criar nova conta."""
 
     name: str = Field(..., min_length=2, max_length=150)
-    phone: str = Field(..., min_length=8, max_length=30)
+    email: EmailStr = Field(...)
     password: str = Field(..., min_length=6, max_length=128)
     user_type: Literal["cliente", "motorista"] = "cliente"
-    email: EmailStr | None = None
+    phone: str | None = None
     client_type: str | None = "individual"
     company_name: str | None = None
     city: str | None = None
@@ -30,9 +30,9 @@ class RegisterRequest(BaseModel):
 
 
 class LoginRequest(BaseModel):
-    """Credenciais de login (telefone + senha)."""
+    """Credenciais de login (email + senha)."""
 
-    phone: str
+    email: EmailStr
     password: str
 
 

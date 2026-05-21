@@ -14,15 +14,9 @@ from schemas import PasswordChangeRequest, RegisterRequest
 def register_user(db: Session, data: RegisterRequest) -> User:
     """
     Cria utilizador e perfil (cliente ou motorista).
-    Valida telefone e email únicos.
+    Valida email único.
     """
-    if db.query(User).filter(User.phone == data.phone).first():
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Telefone já registado",
-        )
-
-    if data.email and db.query(User).filter(User.email == data.email).first():
+    if db.query(User).filter(User.email == data.email).first():
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Email já registado",
@@ -30,8 +24,8 @@ def register_user(db: Session, data: RegisterRequest) -> User:
 
     user = User(
         name=data.name,
-        phone=data.phone,
         email=data.email,
+        phone=data.phone or "",
         password_hash=hash_password(data.password),
         user_type=data.user_type,
     )
@@ -57,17 +51,17 @@ def register_user(db: Session, data: RegisterRequest) -> User:
     return user
 
 
-def authenticate_user(db: Session, phone: str, password: str) -> User:
+def authenticate_user(db: Session, email: str, password: str) -> User:
     """
-    Valida credenciais por telefone e senha.
+    Valida credenciais por email e senha.
     Devolve o utilizador ou lança 401.
     """
-    user = db.query(User).filter(User.phone == phone).first()
+    user = db.query(User).filter(User.email == email).first()
 
     if user is None or not verify_password(password, user.password_hash):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Telefone ou senha incorretos",
+            detail="Email ou senha incorretos",
         )
 
     if user.status != "ativo":

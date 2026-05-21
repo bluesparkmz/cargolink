@@ -35,8 +35,8 @@ def register(data: RegisterRequest, db: Session = Depends(get_db)):
 
 @router.post("/login", response_model=TokenResponse)
 def login(data: LoginRequest, db: Session = Depends(get_db)):
-    """Autentica por telefone e senha; devolve token JWT."""
-    user = authenticate_user(db, data.phone, data.password)
+    """Autentica por email e senha; devolve token JWT."""
+    user = authenticate_user(db, data.email, data.password)
     token = create_user_token(user)
     return TokenResponse(access_token=token)
 
