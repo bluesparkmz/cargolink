@@ -1,16 +1,40 @@
 """
-Controller de veículos (camiões).
+Controller de veiculos (camioes).
 """
 
 from decimal import Decimal
 
 from fastapi import HTTPException, status
+from sqlalchemy import or_
 from sqlalchemy.orm import Session, joinedload
 
 from constants import VEHICLE_STATUSES, VEHICLE_STATUS_INACTIVE
 from controllers.drivers_controller import get_my_driver
-from models import Driver, User, Vehicle
+from models import Company, Driver, User, Vehicle
 from schemas import VehicleCreateRequest, VehicleUpdateRequest
+
+
+def get_my_company(db: Session, user: User) -> Company:
+    """Obtem a empresa transportadora do utilizador autenticado."""
+    if user.user_type != "empresa":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Apenas empresas transportadoras podem gerir frota",
+        )
+    company = db.query(Company).filter(Company.user_id == user.id).first()
+    if company is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Perfil de empresa nao encontrado",
+        )
+    return company
+
+
+def _vehicle_options():
+    return (
+        joinedload(Vehicle.company).joinedload(Company.user),
+        joinedload(Vehicle.driver).joinedload(Driver.user),
+    )
 
 
 def list_vehicles(
@@ -19,81 +43,90 @@ def list_vehicles(
     status_filter: str | None = "disponivel",
     available_only: bool = True,
 ) -> list[Vehicle]:
-    """Lista camiões para o carrossel do app."""
-    query = db.query(Vehicle).options(
-        joinedload(Vehicle.driver).joinedload(Driver.user)
-    )
+    """Lista camioes para o carrossel do app."""
+    query = db.query(Vehicle).options(*_vehicle_options())
     if status_filter:
         query = query.filter(Vehicle.status == status_filter)
     else:
         query = query.filter(Vehicle.status != VEHICLE_STATUS_INACTIVE)
     if available_only:
-        query = query.join(Driver).filter(Driver.available.is_(True))
+        query = query.outerjoin(Driver).filter(
+            or_(Vehicle.driver_id.is_(None), Driver.available.is_(True))
+        )
     return query.order_by(Vehicle.created_at.desc()).all()
 
 
 def list_my_vehicles(db: Session, user: User) -> list[Vehicle]:
-    """Lista veículos do motorista autenticado."""
-    driver = get_my_driver(db, user)
+    """Lista veiculos da empresa ou atribuidos ao motorista autenticado."""
+    query = db.query(Vehicle).options(*_vehicle_options())
+    if user.user_type == "empresa":
+        company = get_my_company(db, user)
+        query = query.filter(Vehicle.company_id == company.id)
+    else:
+        driver = get_my_driver(db, user)
+        query = query.filter(Vehicle.driver_id == driver.id)
     return (
-        db.query(Vehicle)
-        .options(joinedload(Vehicle.driver).joinedload(Driver.user))
-        .filter(Vehicle.driver_id == driver.id, Vehicle.status != VEHICLE_STATUS_INACTIVE)
+        query.filter(Vehicle.status != VEHICLE_STATUS_INACTIVE)
         .order_by(Vehicle.created_at.desc())
         .all()
     )
 
 
 def get_vehicle_by_id(db: Session, vehicle_id: int) -> Vehicle:
-    """Detalhe do veículo com motorista."""
+    """Detalhe do veiculo com empresa e motorista atribuido."""
     vehicle = (
         db.query(Vehicle)
-        .options(joinedload(Vehicle.driver).joinedload(Driver.user))
+        .options(*_vehicle_options())
         .filter(Vehicle.id == vehicle_id)
         .first()
     )
     if vehicle is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Veículo não encontrado",
+            detail="Veiculo nao encontrado",
         )
     return vehicle
 
 
 def _get_own_vehicle(db: Session, user: User, vehicle_id: int) -> Vehicle:
-    """Veículo que pertence ao motorista autenticado."""
-    driver = get_my_driver(db, user)
+    """Veiculo gerido pela empresa ou atribuido ao motorista autenticado."""
     vehicle = get_vehicle_by_id(db, vehicle_id)
-    if vehicle.driver_id != driver.id:
+    allowed = False
+    if user.user_type == "empresa":
+        company = get_my_company(db, user)
+        allowed = vehicle.company_id == company.id
+    elif user.user_type == "motorista":
+        driver = get_my_driver(db, user)
+        allowed = vehicle.driver_id == driver.id
+
+    if not allowed:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Veículo de outro motorista",
+            detail="Veiculo de outra conta",
         )
     return vehicle
 
 
-def _validate_vehicle_status(status: str) -> None:
-    if status not in VEHICLE_STATUSES:
+def _validate_vehicle_status(vehicle_status: str) -> None:
+    if vehicle_status not in VEHICLE_STATUSES:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Status inválido. Use: {', '.join(sorted(VEHICLE_STATUSES))}",
+            detail=f"Status invalido. Use: {', '.join(sorted(VEHICLE_STATUSES))}",
         )
 
 
-def create_vehicle(db: Session, user: User, data: VehicleCreateRequest) -> Vehicle:
-    """Motorista regista novo camião."""
-    driver = get_my_driver(db, user)
-    _validate_vehicle_status(data.status)
-
-    existing = db.query(Vehicle).filter(Vehicle.plate == data.plate.strip().upper()).first()
-    if existing:
+def _validate_company_driver(db: Session, company: Company, driver_id: int | None) -> None:
+    if driver_id is None:
+        return
+    driver = db.query(Driver).filter(Driver.id == driver_id).first()
+    if driver is None or driver.company_id != company.id:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Matrícula já registada",
+            detail="Motorista invalido para esta empresa",
         )
 
-    payload = data.model_dump()
-    payload["plate"] = data.plate.strip().upper()
+
+def _normalize_vehicle_payload(payload: dict) -> dict:
     if payload.get("tonnage_capacity") is not None:
         payload["tonnage_capacity"] = Decimal(str(payload["tonnage_capacity"]))
     if payload.get("current_lat") is not None:
@@ -104,8 +137,26 @@ def create_vehicle(db: Session, user: User, data: VehicleCreateRequest) -> Vehic
         from controllers.location_controller import _now
 
         payload["location_updated_at"] = _now()
+    return payload
 
-    vehicle = Vehicle(driver_id=driver.id, **payload)
+
+def create_vehicle(db: Session, user: User, data: VehicleCreateRequest) -> Vehicle:
+    """Empresa regista novo camiao e pode atribuir motorista."""
+    company = get_my_company(db, user)
+    _validate_vehicle_status(data.status)
+    _validate_company_driver(db, company, data.driver_id)
+
+    existing = db.query(Vehicle).filter(Vehicle.plate == data.plate.strip().upper()).first()
+    if existing:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Matricula ja registada",
+        )
+
+    payload = _normalize_vehicle_payload(data.model_dump())
+    payload["plate"] = data.plate.strip().upper()
+
+    vehicle = Vehicle(company_id=company.id, **payload)
     db.add(vehicle)
     db.commit()
     return get_vehicle_by_id(db, vehicle.id)
@@ -114,12 +165,20 @@ def create_vehicle(db: Session, user: User, data: VehicleCreateRequest) -> Vehic
 def update_vehicle(
     db: Session, user: User, vehicle_id: int, data: VehicleUpdateRequest
 ) -> Vehicle:
-    """Motorista atualiza o próprio veículo."""
+    """Empresa atualiza o proprio veiculo."""
+    if user.user_type != "empresa":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Apenas empresas podem editar dados do camiao",
+        )
+    company = get_my_company(db, user)
     vehicle = _get_own_vehicle(db, user, vehicle_id)
     fields = data.model_dump(exclude_unset=True)
 
     if "status" in fields:
         _validate_vehicle_status(fields["status"])
+    if "driver_id" in fields:
+        _validate_company_driver(db, company, fields["driver_id"])
     if "plate" in fields and fields["plate"]:
         plate = fields["plate"].strip().upper()
         taken = (
@@ -130,20 +189,11 @@ def update_vehicle(
         if taken:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Matrícula já registada",
+                detail="Matricula ja registada",
             )
         fields["plate"] = plate
-    if "tonnage_capacity" in fields and fields["tonnage_capacity"] is not None:
-        fields["tonnage_capacity"] = Decimal(str(fields["tonnage_capacity"]))
-    if "current_lat" in fields and fields["current_lat"] is not None:
-        fields["current_lat"] = Decimal(str(fields["current_lat"]))
-    if "current_lng" in fields and fields["current_lng"] is not None:
-        fields["current_lng"] = Decimal(str(fields["current_lng"]))
-    if "current_lat" in fields or "current_lng" in fields:
-        from controllers.location_controller import _now
 
-        fields["location_updated_at"] = _now()
-
+    fields = _normalize_vehicle_payload(fields)
     for field, value in fields.items():
         setattr(vehicle, field, value)
 
@@ -152,7 +202,12 @@ def update_vehicle(
 
 
 def deactivate_vehicle(db: Session, user: User, vehicle_id: int) -> None:
-    """Remove veículo da listagem (soft delete)."""
+    """Remove veiculo da listagem (soft delete)."""
+    if user.user_type != "empresa":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Apenas empresas podem desativar camioes",
+        )
     vehicle = _get_own_vehicle(db, user, vehicle_id)
     vehicle.status = VEHICLE_STATUS_INACTIVE
     db.commit()

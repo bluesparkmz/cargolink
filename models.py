@@ -45,6 +45,7 @@ class User(Base):
     )
 
     client: Mapped[Client | None] = relationship(back_populates="user", uselist=False)
+    company: Mapped[Company | None] = relationship(back_populates="user", uselist=False)
     driver: Mapped[Driver | None] = relationship(back_populates="user", uselist=False)
     documents: Mapped[list[Document]] = relationship(back_populates="user")
     notifications: Mapped[list[Notification]] = relationship(back_populates="user")
@@ -79,6 +80,31 @@ class Client(Base):
 # ---------------------------------------------------------------------------
 
 
+class Company(Base):
+    """Tabela companies: empresa transportadora dona da frota e das propostas."""
+
+    __tablename__ = "companies"
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), unique=True)
+    company_name: Mapped[str] = mapped_column("nome_empresa", String(150), nullable=False)
+    tax_id: Mapped[str | None] = mapped_column("nuit", String(50))
+    license_number: Mapped[str | None] = mapped_column("numero_licenca", String(100))
+    address: Mapped[str | None] = mapped_column("endereco", Text)
+    city: Mapped[str | None] = mapped_column("cidade", String(100))
+    state: Mapped[str | None] = mapped_column("provincia", String(100))
+    average_rating: Mapped[Decimal] = mapped_column("avaliacao_media", Numeric(3, 2), default=0)
+    total_trips: Mapped[int] = mapped_column("total_viagens", Integer, default=0)
+    verified: Mapped[bool] = mapped_column("verificada", Boolean, default=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
+
+    user: Mapped[User] = relationship(back_populates="company")
+    drivers: Mapped[list[Driver]] = relationship(back_populates="company")
+    vehicles: Mapped[list[Vehicle]] = relationship(back_populates="company")
+    proposals: Mapped[list[LoadProposal]] = relationship(back_populates="company")
+    trips: Mapped[list[Trip]] = relationship(back_populates="company")
+
+
 class Driver(Base):
     """Tabela drivers — perfil do motorista."""
 
@@ -86,6 +112,7 @@ class Driver(Base):
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), unique=True)
+    company_id: Mapped[int | None] = mapped_column(ForeignKey("companies.id", ondelete="SET NULL"))
     license_number: Mapped[str | None] = mapped_column("numero_carta", String(100))
     license_expiry: Mapped[date | None] = mapped_column("validade_carta", Date)
     years_experience: Mapped[int] = mapped_column("experiencia_anos", Integer, default=0)
@@ -98,8 +125,8 @@ class Driver(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
 
     user: Mapped[User] = relationship(back_populates="driver")
+    company: Mapped[Company | None] = relationship(back_populates="drivers")
     vehicles: Mapped[list[Vehicle]] = relationship(back_populates="driver")
-    proposals: Mapped[list[LoadProposal]] = relationship(back_populates="driver")
     trips: Mapped[list[Trip]] = relationship(back_populates="driver")
 
 
@@ -109,7 +136,8 @@ class Vehicle(Base):
     __tablename__ = "vehicles"
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
-    driver_id: Mapped[int] = mapped_column(ForeignKey("drivers.id", ondelete="CASCADE"))
+    company_id: Mapped[int | None] = mapped_column(ForeignKey("companies.id", ondelete="CASCADE"))
+    driver_id: Mapped[int | None] = mapped_column(ForeignKey("drivers.id", ondelete="SET NULL"))
     plate: Mapped[str] = mapped_column("matricula", String(50), unique=True, nullable=False)
     brand: Mapped[str | None] = mapped_column("marca", String(100))
     model_name: Mapped[str | None] = mapped_column("modelo", String(100))
@@ -123,7 +151,8 @@ class Vehicle(Base):
     location_updated_at: Mapped[datetime | None] = mapped_column(DateTime)
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
 
-    driver: Mapped[Driver] = relationship(back_populates="vehicles")
+    company: Mapped[Company | None] = relationship(back_populates="vehicles")
+    driver: Mapped[Driver | None] = relationship(back_populates="vehicles")
     trips: Mapped[list[Trip]] = relationship(back_populates="vehicle")
 
 
@@ -214,14 +243,18 @@ class LoadProposal(Base):
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
     load_id: Mapped[int] = mapped_column(ForeignKey("loads.id", ondelete="CASCADE"))
-    driver_id: Mapped[int] = mapped_column(ForeignKey("drivers.id", ondelete="CASCADE"))
+    company_id: Mapped[int | None] = mapped_column(ForeignKey("companies.id", ondelete="CASCADE"))
+    driver_id: Mapped[int | None] = mapped_column(ForeignKey("drivers.id", ondelete="SET NULL"))
+    vehicle_id: Mapped[int | None] = mapped_column(ForeignKey("vehicles.id", ondelete="SET NULL"))
     proposed_value: Mapped[Decimal | None] = mapped_column("valor_proposto", Numeric(12, 2))
     message: Mapped[str | None] = mapped_column("mensagem", Text)
     status: Mapped[str] = mapped_column(String(30), default="pendente")
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
 
     load: Mapped[Load] = relationship(back_populates="proposals")
-    driver: Mapped[Driver] = relationship(back_populates="proposals")
+    company: Mapped[Company | None] = relationship(back_populates="proposals")
+    driver: Mapped[Driver | None] = relationship()
+    vehicle: Mapped[Vehicle | None] = relationship()
 
 
 # ---------------------------------------------------------------------------
@@ -236,6 +269,7 @@ class Trip(Base):
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
     load_id: Mapped[int] = mapped_column(ForeignKey("loads.id", ondelete="CASCADE"), unique=True)
+    company_id: Mapped[int | None] = mapped_column(ForeignKey("companies.id"))
     driver_id: Mapped[int | None] = mapped_column(ForeignKey("drivers.id"))
     vehicle_id: Mapped[int | None] = mapped_column(ForeignKey("vehicles.id"))
     status: Mapped[str] = mapped_column(String(40), default="aguardando_inicio")
@@ -251,6 +285,7 @@ class Trip(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
 
     load: Mapped[Load] = relationship(back_populates="trip")
+    company: Mapped[Company | None] = relationship(back_populates="trips")
     driver: Mapped[Driver | None] = relationship(back_populates="trips")
     vehicle: Mapped[Vehicle | None] = relationship(back_populates="trips")
     locations: Mapped[list[TripLocation]] = relationship(back_populates="trip")

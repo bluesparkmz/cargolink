@@ -6,7 +6,7 @@ from fastapi import HTTPException, status
 from sqlalchemy import func
 from sqlalchemy.orm import Session, joinedload
 
-from models import Client, Driver, Load, LoadProposal, Message, Trip, User
+from models import Client, Company, Driver, Load, LoadProposal, Message, Trip, User
 from schemas import MessageCreateRequest
 
 
@@ -28,6 +28,20 @@ def _user_can_access_load_chat(db: Session, user: User, load: Load) -> None:
             .first()
         )
         trip = db.query(Trip).filter(Trip.load_id == load.id, Trip.driver_id == driver.id).first()
+        if has_proposal or trip:
+            return
+
+    if user.user_type == "empresa":
+        company = db.query(Company).filter(Company.user_id == user.id).first()
+        if company is None:
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Sem acesso")
+
+        has_proposal = (
+            db.query(LoadProposal)
+            .filter(LoadProposal.load_id == load.id, LoadProposal.company_id == company.id)
+            .first()
+        )
+        trip = db.query(Trip).filter(Trip.load_id == load.id, Trip.company_id == company.id).first()
         if has_proposal or trip:
             return
 

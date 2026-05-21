@@ -1,5 +1,5 @@
 """
-Rotas de veículos (camiões disponíveis e gestão pelo motorista).
+Rotas de veiculos: camioes disponiveis e gestao pela empresa.
 """
 
 from fastapi import APIRouter, Depends, Query
@@ -35,6 +35,7 @@ def _to_list_item(vehicle: Vehicle) -> VehicleListItem:
     )
     return VehicleListItem(
         id=vehicle.id,
+        company_id=vehicle.company_id,
         driver_id=vehicle.driver_id,
         plate=vehicle.plate,
         brand=vehicle.brand,
@@ -55,8 +56,9 @@ def _to_detail(vehicle: Vehicle) -> VehicleDetailResponse:
     item = _to_list_item(vehicle)
     return VehicleDetailResponse(
         **item.model_dump(),
-        driver_name=vehicle.driver.user.name,
-        driver_rating=float(vehicle.driver.average_rating),
+        company_name=vehicle.company.company_name if vehicle.company else None,
+        driver_name=vehicle.driver.user.name if vehicle.driver else None,
+        driver_rating=float(vehicle.driver.average_rating) if vehicle.driver else None,
     )
 
 
@@ -65,7 +67,7 @@ def list_my(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    """Lista camiões do motorista autenticado."""
+    """Lista camioes da empresa ou atribuidos ao motorista autenticado."""
     return [_to_list_item(v) for v in list_my_vehicles(db, current_user)]
 
 
@@ -75,7 +77,7 @@ def create(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    """Motorista regista novo camião."""
+    """Empresa regista novo camiao."""
     vehicle = create_vehicle(db, current_user, data)
     return _to_list_item(vehicle)
 
@@ -87,7 +89,7 @@ def patch_location(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    """Motorista atualiza posição GPS do camião no mapa."""
+    """Motorista atribuido atualiza posicao GPS do camiao no mapa."""
     vehicle = update_vehicle_location(db, current_user, vehicle_id, data)
     return _to_list_item(vehicle)
 
@@ -99,8 +101,8 @@ def patch(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    """Motorista atualiza o próprio camião."""
-    vehicle = update_vehicle(db, current_user, vehicle_id, data)
+    """Empresa atualiza o proprio camiao."""
+    vehicle = update_vehicle(db, current_user, data=data, vehicle_id=vehicle_id)
     return _to_list_item(vehicle)
 
 
@@ -110,18 +112,18 @@ def remove(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    """Motorista desativa camião (não aparece nas listagens)."""
+    """Empresa desativa camiao."""
     deactivate_vehicle(db, current_user, vehicle_id)
 
 
 @router.get("", response_model=list[VehicleListItem])
 def list_all(
-    status: str | None = Query("disponivel", description="Filtrar por status do veículo"),
-    available_only: bool = Query(True, description="Só motoristas disponíveis"),
+    status: str | None = Query("disponivel", description="Filtrar por status do veiculo"),
+    available_only: bool = Query(True, description="So motoristas disponiveis"),
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    """Lista camiões (carrossel Camiões disponíveis)."""
+    """Lista camioes disponiveis."""
     vehicles = list_vehicles(db, status_filter=status, available_only=available_only)
     return [_to_list_item(v) for v in vehicles]
 
@@ -132,5 +134,5 @@ def get_by_id(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    """Detalhe do camião."""
+    """Detalhe do camiao."""
     return _to_detail(get_vehicle_by_id(db, vehicle_id))

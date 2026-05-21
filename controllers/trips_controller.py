@@ -14,7 +14,7 @@ from constants import (
     TRIP_STATUS_WAITING,
     TRIP_STATUS_WAITING_CLIENT,
 )
-from models import Client, Driver, Load, Trip, TripLocation, User, Vehicle
+from models import Client, Company, Driver, Load, Trip, TripLocation, User, Vehicle
 from schemas import TripLocationCreateRequest, TripStartRequest
 
 
@@ -36,6 +36,10 @@ def _user_can_access_trip(db: Session, user: User, trip: Trip) -> None:
         client = db.query(Client).filter(Client.user_id == user.id).first()
         load = db.query(Load).filter(Load.id == trip.load_id).first()
         if client and load and load.client_id == client.id:
+            return
+    if user.user_type == "empresa":
+        company = db.query(Company).filter(Company.user_id == user.id).first()
+        if company and trip.company_id == company.id:
             return
     if user.user_type == "admin":
         return
@@ -67,6 +71,17 @@ def list_my_trips(db: Session, user: User) -> list[Trip]:
             .all()
         )
 
+    if user.user_type == "empresa":
+        company = db.query(Company).filter(Company.user_id == user.id).first()
+        if company is None:
+            return []
+        return (
+            db.query(Trip)
+            .filter(Trip.company_id == company.id)
+            .order_by(Trip.created_at.desc())
+            .all()
+        )
+
     return db.query(Trip).order_by(Trip.created_at.desc()).all()
 
 
@@ -91,10 +106,15 @@ def start_trip(db: Session, user: User, trip_id: int, data: TripStartRequest) ->
 
     if data.vehicle_id:
         vehicle = db.query(Vehicle).filter(Vehicle.id == data.vehicle_id).first()
-        if vehicle is None or vehicle.driver_id != driver.id:
+        if vehicle is None or vehicle.company_id != trip.company_id:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="Veículo inválido para este motorista",
+            )
+        if vehicle.driver_id is not None and vehicle.driver_id != driver.id:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Veiculo atribuido a outro motorista",
             )
         trip.vehicle_id = data.vehicle_id
 
@@ -170,6 +190,10 @@ def confirm_delivery(db: Session, user: User, trip_id: int) -> Trip:
         driver = db.query(Driver).filter(Driver.id == trip.driver_id).first()
         if driver:
             driver.total_trips += 1
+    if trip.company_id:
+        company = db.query(Company).filter(Company.id == trip.company_id).first()
+        if company:
+            company.total_trips += 1
 
     db.commit()
     db.refresh(trip)

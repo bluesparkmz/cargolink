@@ -7,13 +7,13 @@ from fastapi import HTTPException, status
 from sqlalchemy.orm import Session
 
 from security import create_access_token, hash_password, verify_password
-from models import Client, Driver, User, Wallet
+from models import Client, Company, Driver, User, Wallet
 from schemas import PasswordChangeRequest, RegisterRequest
 
 
 def register_user(db: Session, data: RegisterRequest) -> User:
     """
-    Cria utilizador e perfil (cliente ou motorista).
+    Cria utilizador e perfil (cliente, empresa ou motorista).
     Valida email único.
     """
     if db.query(User).filter(User.email == data.email).first():
@@ -44,6 +44,14 @@ def register_user(db: Session, data: RegisterRequest) -> User:
         db.add(profile)
     elif data.user_type == "motorista":
         profile = Driver(user_id=user.id)
+        db.add(profile)
+    elif data.user_type == "empresa":
+        profile = Company(
+            user_id=user.id,
+            company_name=data.company_name or data.name,
+            city=data.city,
+            state=data.state,
+        )
         db.add(profile)
 
     db.commit()

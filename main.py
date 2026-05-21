@@ -11,6 +11,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from database import Base, engine
 from routers.auth import router as auth_router
 from routers.clients import router as clients_router
+from routers.companies import router as companies_router
 from routers.documents import router as documents_router
 from routers.drivers import router as drivers_router
 from routers.loads import router as loads_router
@@ -53,6 +54,7 @@ app.add_middleware(
 app.include_router(auth_router, prefix="/auth", tags=["Auth"])
 app.include_router(users_router, prefix="/users", tags=["Users"])
 app.include_router(clients_router, prefix="/clients", tags=["Clients"])
+app.include_router(companies_router, prefix="/companies", tags=["Companies"])
 app.include_router(documents_router, prefix="/documents", tags=["Documents"])
 app.include_router(drivers_router, prefix="/drivers", tags=["Drivers"])
 app.include_router(loads_router, prefix="/loads", tags=["Loads"])

@@ -32,6 +32,7 @@ def _to_list_item(driver: Driver) -> DriverListItem:
     return DriverListItem(
         id=driver.id,
         user_id=driver.user_id,
+        company_id=driver.company_id,
         name=driver.user.name,
         average_rating=float(driver.average_rating),
         total_trips=driver.total_trips,

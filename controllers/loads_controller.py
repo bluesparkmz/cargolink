@@ -21,7 +21,7 @@ from constants import (
     ROUTE_AVG_SPEED_KMH_MIN,
     WEIGHT_UNITS,
 )
-from models import Client, Driver, Load, LoadImage, LoadProposal, Rating, Trip, TripLocation, User
+from models import Client, Company, Driver, Load, LoadImage, LoadProposal, Rating, Trip, TripLocation, User, Vehicle
 from controllers.trips_controller import _user_can_access_trip
 from schemas import (
     LoadCreateRequest,
@@ -233,6 +233,51 @@ def get_driver_or_403(db: Session, user: User) -> Driver:
     return driver
 
 
+def get_company_or_403(db: Session, user: User) -> Company:
+    """Obtém perfil da empresa transportadora autenticada."""
+    if user.user_type != "empresa":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Apenas empresas transportadoras podem enviar propostas",
+        )
+    company = db.query(Company).filter(Company.user_id == user.id).first()
+    if company is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Perfil de empresa nÃ£o encontrado",
+        )
+    return company
+
+
+def _validate_company_trip_resources(
+    db: Session, company: Company, driver_id: int | None, vehicle_id: int | None
+) -> None:
+    if driver_id is None or vehicle_id is None:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Informe o motorista e o camiÃ£o da empresa para esta proposta",
+        )
+
+    driver = db.query(Driver).filter(Driver.id == driver_id).first()
+    if driver is None or driver.company_id != company.id:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Motorista invÃ¡lido para esta empresa",
+        )
+
+    vehicle = db.query(Vehicle).filter(Vehicle.id == vehicle_id).first()
+    if vehicle is None or vehicle.company_id != company.id:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="CamiÃ£o invÃ¡lido para esta empresa",
+        )
+    if vehicle.driver_id is not None and vehicle.driver_id != driver.id:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Este camiÃ£o estÃ¡ atribuido a outro motorista",
+        )
+
+
 def get_load_detail(db: Session, load_id: int) -> Load:
     """Busca carga com imagens e cliente."""
     load = (
@@ -361,6 +406,20 @@ def get_load_tracking(db: Session, user: User, load_id: int) -> dict:
             )
         if not allowed:
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Sem acesso")
+    elif user.user_type == "empresa":
+        company = db.query(Company).filter(Company.user_id == user.id).first()
+        if not company:
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Sem acesso")
+        allowed = trip is not None and trip.company_id == company.id
+        if not allowed:
+            allowed = (
+                db.query(LoadProposal)
+                .filter(LoadProposal.load_id == load_id, LoadProposal.company_id == company.id)
+                .first()
+                is not None
+            )
+        if not allowed:
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Sem acesso")
     elif user.user_type != "admin":
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Sem acesso")
     trackable = trip is not None and trip.status in (
@@ -467,7 +526,8 @@ def create_proposal(
     db: Session, user: User, load_id: int, data: LoadProposalCreateRequest
 ) -> LoadProposal:
     """Motorista envia proposta para carga disponível."""
-    driver = get_driver_or_403(db, user)
+    company = get_company_or_403(db, user)
+    _validate_company_trip_resources(db, company, data.driver_id, data.vehicle_id)
     load = get_load_detail(db, load_id)
 
     if load.status != "disponivel":
@@ -478,7 +538,7 @@ def create_proposal(
 
     exists = (
         db.query(LoadProposal)
-        .filter(LoadProposal.load_id == load_id, LoadProposal.driver_id == driver.id)
+        .filter(LoadProposal.load_id == load_id, LoadProposal.company_id == company.id)
         .first()
     )
     if exists:
@@ -489,7 +549,9 @@ def create_proposal(
 
     proposal = LoadProposal(
         load_id=load_id,
-        driver_id=driver.id,
+        company_id=company.id,
+        driver_id=data.driver_id,
+        vehicle_id=data.vehicle_id,
         proposed_value=Decimal(str(data.proposed_value)) if data.proposed_value else None,
         message=data.message,
     )
@@ -561,7 +623,12 @@ def accept_proposal(db: Session, user: User, load_id: int, proposal_id: int) -> 
         other.status = "recusada"
 
     load.status = "aceite"
-    trip = Trip(load_id=load_id, driver_id=proposal.driver_id)
+    trip = Trip(
+        load_id=load_id,
+        company_id=proposal.company_id,
+        driver_id=proposal.driver_id,
+        vehicle_id=proposal.vehicle_id,
+    )
     db.add(trip)
     db.commit()
     db.refresh(trip)

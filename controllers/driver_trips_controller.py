@@ -87,6 +87,7 @@ def build_trip_detail(trip: Trip) -> dict:
     data = {
         "id": trip.id,
         "load_id": trip.load_id,
+        "company_id": trip.company_id,
         "driver_id": trip.driver_id,
         "vehicle_id": trip.vehicle_id,
         "status": trip.status,

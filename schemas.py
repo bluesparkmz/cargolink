@@ -21,7 +21,7 @@ class RegisterRequest(BaseModel):
     name: str = Field(..., min_length=2, max_length=150)
     email: EmailStr = Field(...)
     password: str = Field(..., min_length=6, max_length=128)
-    user_type: Literal["cliente", "motorista"] = "cliente"
+    user_type: Literal["cliente", "empresa", "motorista"] = "cliente"
     phone: str | None = None
     client_type: str | None = "individual"
     company_name: str | None = None
@@ -96,6 +96,7 @@ class DriverProfileResponse(BaseModel):
     """Perfil motorista ligado ao utilizador."""
 
     id: int
+    company_id: int | None = None
     license_number: str | None = None
     license_expiry: date | None = None
     years_experience: int
@@ -109,10 +110,39 @@ class DriverProfileResponse(BaseModel):
     model_config = {"from_attributes": True}
 
 
+class CompanyProfileResponse(BaseModel):
+    """Perfil da empresa transportadora."""
+
+    id: int
+    company_name: str
+    tax_id: str | None = None
+    license_number: str | None = None
+    address: str | None = None
+    city: str | None = None
+    state: str | None = None
+    average_rating: float
+    total_trips: int
+    verified: bool
+
+    model_config = {"from_attributes": True}
+
+
+class CompanyProfileUpdateRequest(BaseModel):
+    """Atualizacao do perfil da empresa transportadora."""
+
+    company_name: str | None = Field(None, min_length=2, max_length=150)
+    tax_id: str | None = None
+    license_number: str | None = None
+    address: str | None = None
+    city: str | None = None
+    state: str | None = None
+
+
 class UserProfileResponse(UserResponse):
     """Utilizador com perfil cliente ou motorista."""
 
     client: ClientProfileResponse | None = None
+    company: CompanyProfileResponse | None = None
     driver: DriverProfileResponse | None = None
 
 
@@ -230,6 +260,7 @@ class DriverListItem(BaseModel):
 
     id: int
     user_id: int
+    company_id: int | None = None
     name: str
     average_rating: float
     total_trips: int
@@ -241,6 +272,51 @@ class DriverListItem(BaseModel):
     location_updated_at: datetime | None = None
 
     model_config = {"from_attributes": True}
+
+
+# ---------------------------------------------------------------------------
+# Empresas transportadoras
+# ---------------------------------------------------------------------------
+
+
+class CompanyUserSummary(BaseModel):
+    """Dados publicos do utilizador ligado a empresa."""
+
+    id: int
+    name: str
+    phone: str
+    email: str | None = None
+    profile_photo: str | None = None
+    verified: bool
+
+    model_config = {"from_attributes": True}
+
+
+class CompanyDetailResponse(CompanyProfileResponse):
+    """Empresa com dados do utilizador."""
+
+    user: CompanyUserSummary
+
+
+class CompanyListItem(BaseModel):
+    """Item resumido na listagem de empresas transportadoras."""
+
+    id: int
+    user_id: int
+    company_name: str
+    city: str | None = None
+    state: str | None = None
+    average_rating: float
+    total_trips: int
+    verified: bool
+
+    model_config = {"from_attributes": True}
+
+
+class CompanyDriverAttachRequest(BaseModel):
+    """Associar motorista existente a empresa autenticada."""
+
+    driver_id: int
 
 
 # ---------------------------------------------------------------------------
@@ -416,10 +492,12 @@ class LoadListItem(BaseModel):
 
 
 class LoadProposalCreateRequest(BaseModel):
-    """Proposta do motorista para uma carga."""
+    """Proposta da empresa para uma carga."""
 
     proposed_value: float | None = None
     message: str | None = None
+    driver_id: int | None = None
+    vehicle_id: int | None = None
 
 
 class LoadProposalResponse(BaseModel):
@@ -427,7 +505,9 @@ class LoadProposalResponse(BaseModel):
 
     id: int
     load_id: int
-    driver_id: int
+    company_id: int | None = None
+    driver_id: int | None = None
+    vehicle_id: int | None = None
     proposed_value: float | None = None
     message: str | None = None
     status: str
@@ -446,6 +526,7 @@ class TripResponse(BaseModel):
 
     id: int
     load_id: int
+    company_id: int | None = None
     driver_id: int | None
     vehicle_id: int | None
     status: str
@@ -613,7 +694,8 @@ class VehicleListItem(BaseModel):
     """Camião disponível na listagem horizontal."""
 
     id: int
-    driver_id: int
+    company_id: int | None = None
+    driver_id: int | None = None
     plate: str
     brand: str | None = None
     model_name: str | None = None
@@ -631,13 +713,15 @@ class VehicleListItem(BaseModel):
 class VehicleDetailResponse(VehicleListItem):
     """Detalhe do veículo com dados do motorista."""
 
-    driver_name: str
-    driver_rating: float
+    company_name: str | None = None
+    driver_name: str | None = None
+    driver_rating: float | None = None
 
 
 class VehicleCreateRequest(BaseModel):
     """Motorista regista novo camião."""
 
+    driver_id: int | None = None
     plate: str = Field(..., min_length=3, max_length=50)
     brand: str | None = Field(None, max_length=100)
     model_name: str | None = Field(None, max_length=100)
@@ -652,6 +736,7 @@ class VehicleCreateRequest(BaseModel):
 class VehicleUpdateRequest(BaseModel):
     """Atualização parcial do veículo."""
 
+    driver_id: int | None = None
     plate: str | None = Field(None, min_length=3, max_length=50)
     brand: str | None = None
     model_name: str | None = None
