@@ -36,7 +36,7 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(
     title="CargoLink API",
-    description="API base — modelos completos e autenticação JWT",
+    description="API para o projeto CargoLink",
     version="0.1.0",
     lifespan=lifespan,
 )

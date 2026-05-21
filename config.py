@@ -1,26 +1,38 @@
 """
 Configurações da aplicação CargoLink.
-Carrega variáveis de ambiente para base de dados e JWT.
+Lê variáveis de ambiente com os.getenv (sem ficheiro .env automático).
 """
 
-from pydantic_settings import BaseSettings, SettingsConfigDict
+import os
 
 
-class Settings(BaseSettings):
-    """Parâmetros globais lidos do ficheiro .env."""
+def _env_bool(name: str, default: bool = False) -> bool:
+    value = os.getenv(name)
+    if value is None:
+        return default
+    return value.strip().lower() in ("1", "true", "yes", "on")
 
-    model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8")
 
-    # Base de dados PostgreSQL
-    DATABASE_URL: str = "postgresql://postgres:postgres@localhost:5432/cargolink"
+def _env_int(name: str, default: int) -> int:
+    value = os.getenv(name)
+    if value is None:
+        return default
+    return int(value)
 
-    # JWT
-    SECRET_KEY: str = "altere-esta-chave-em-producao"
-    ALGORITHM: str = "HS256"
-    ACCESS_TOKEN_EXPIRE_MINUTES: int = 60 * 24  # 24 horas
 
-    # Em dev confirma depósitos M-Pesa automaticamente; em produção usar webhook/callback
-    AUTO_CONFIRM_MPESA_DEPOSITS: bool = True
+class Settings:
+    """Parâmetros globais da API."""
+
+    DATABASE_URL: str
+    SECRET_KEY: str
+    ALGORITHM: str
+    ACCESS_TOKEN_EXPIRE_MINUTES: int
+    AUTO_CONFIRM_MPESA_DEPOSITS: bool
 
 
 settings = Settings()
+settings.DATABASE_URL = os.getenv("DATABASE_URL")
+settings.SECRET_KEY = os.getenv("SECRET_KEY", "altere-esta-chave-em-producao")
+settings.ALGORITHM = os.getenv("ALGORITHM", "HS256")
+settings.ACCESS_TOKEN_EXPIRE_MINUTES = _env_int("ACCESS_TOKEN_EXPIRE_MINUTES", 60 * 24)
+settings.AUTO_CONFIRM_MPESA_DEPOSITS = _env_bool("AUTO_CONFIRM_MPESA_DEPOSITS", True)
