@@ -1,10 +1,4 @@
-"""
-Configurações da aplicação CargoLink.
-Lê variáveis de ambiente com os.getenv (sem ficheiro .env automático).
-"""
-
 import os
-
 
 def _env_bool(name: str, default: bool = False) -> bool:
     value = os.getenv(name)
