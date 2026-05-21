@@ -11,7 +11,8 @@ from models import User
 from security import decode_token
 
 # Esquema OAuth2: token enviado no header Authorization: Bearer ...
-oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/auth/login")
+# Nota: Sem tokenUrl, o Swagger não tenta gerar um formulário de login automático
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl="auth/login")
 
 
 def get_current_user(
