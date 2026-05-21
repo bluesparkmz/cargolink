@@ -3,20 +3,19 @@ Dependências FastAPI reutilizáveis (autenticação, sessão DB).
 """
 
 from fastapi import Depends, HTTPException, status
-from fastapi.security import OAuth2PasswordBearer
+from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from sqlalchemy.orm import Session
 
 from database import get_db
 from models import User
 from security import decode_token
 
-# Esquema OAuth2: token enviado no header Authorization: Bearer ...
-# Nota: Sem tokenUrl, o Swagger não tenta gerar um formulário de login automático
-oauth2_scheme = OAuth2PasswordBearer(tokenUrl="auth/login")
+# Esquema Bearer: token enviado no header Authorization: Bearer ...
+security = HTTPBearer()
 
 
 def get_current_user(
-    token: str = Depends(oauth2_scheme),
+    credentials: HTTPAuthorizationCredentials = Depends(security),
     db: Session = Depends(get_db),
 ) -> User:
     """
@@ -29,7 +28,7 @@ def get_current_user(
         headers={"WWW-Authenticate": "Bearer"},
     )
 
-    payload = decode_token(token)
+    payload = decode_token(credentials.credentials)
     if payload is None:
         raise invalid_credentials
 
