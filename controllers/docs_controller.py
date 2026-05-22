@@ -13,6 +13,7 @@ ALLOWED_DOCS = {
     "modelo": "modelo.md",
     "company": "company.md",
     "clients": "clients.md",
+    "driver": "driver.md",
 }
 
 
@@ -185,6 +186,63 @@ def render_document_page(title: str, markdown: str) -> str:
 <body>
   <main>
 {body}
+  </main>
+</body>
+</html>"""
+
+
+def render_documentation_index() -> str:
+    """Renderiza pagina inicial com links para os documentos permitidos."""
+    items = "\n".join(
+        f'<li><a href="/documentation/{escape(item["key"])}">{escape(item["filename"])}</a></li>'
+        for item in list_documentation()
+    )
+    return f"""<!doctype html>
+<html lang="pt">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Documentacao CargoLink</title>
+  <style>
+    body {{
+      margin: 0;
+      padding: 32px 16px;
+      font-family: Arial, Helvetica, sans-serif;
+      background: #f5f7fa;
+      color: #1f2933;
+    }}
+    main {{
+      max-width: 760px;
+      margin: 0 auto;
+      background: #ffffff;
+      border: 1px solid #d9e2ec;
+      border-radius: 8px;
+      padding: 32px;
+    }}
+    h1 {{
+      margin-top: 0;
+      color: #102a43;
+    }}
+    a {{
+      color: #0b63ce;
+      text-decoration: none;
+      font-weight: 600;
+    }}
+    a:hover {{
+      text-decoration: underline;
+    }}
+    li {{
+      margin: 10px 0;
+    }}
+  </style>
+</head>
+<body>
+  <main>
+    <h1>Documentacao CargoLink</h1>
+    <p>Escolha um documento:</p>
+    <ul>
+{items}
+    </ul>
   </main>
 </body>
 </html>"""
