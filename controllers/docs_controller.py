@@ -17,6 +17,13 @@ ALLOWED_DOCS = {
     "driver": "driver.md",
 }
 
+DOC_NAV_ITEMS = (
+    ("documentation", "Geral"),
+    ("documentation/company", "Empresa"),
+    ("documentation/clients", "Cliente"),
+    ("documentation/driver", "Motorista"),
+)
+
 
 def list_documentation() -> list[dict[str, str]]:
     """Lista documentos disponiveis."""
@@ -179,6 +186,7 @@ def render_document_page(title: str, markdown: str) -> str:
     """Renderiza pagina HTML completa para a documentacao."""
     body = markdown_to_safe_html(markdown)
     safe_title = escape(title)
+    nav = render_doc_nav()
     return f"""<!doctype html>
 <html lang="pt">
 <head>
@@ -204,6 +212,31 @@ def render_document_page(title: str, markdown: str) -> str:
       border: 1px solid #d9e2ec;
       border-radius: 8px;
       padding: 32px;
+    }}
+    .quick-nav {{
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      margin-bottom: 22px;
+      padding-bottom: 18px;
+      border-bottom: 1px solid #d9e2ec;
+    }}
+    .quick-nav a {{
+      display: inline-flex;
+      align-items: center;
+      min-height: 34px;
+      padding: 0 12px;
+      border: 1px solid #d9e2ec;
+      border-radius: 999px;
+      background: #f8fafc;
+      color: #102a43;
+      text-decoration: none;
+      font-size: 14px;
+      font-weight: 800;
+    }}
+    .quick-nav a:hover {{
+      border-color: #0b63ce;
+      color: #0b63ce;
     }}
     h1, h2, h3, h4, h5, h6 {{
       color: #102a43;
@@ -278,6 +311,7 @@ def render_document_page(title: str, markdown: str) -> str:
 </head>
 <body>
   <main>
+{nav}
     <a class="back-link" href="/documentation">&larr; Voltar</a>
 {body}
   </main>
@@ -285,10 +319,22 @@ def render_document_page(title: str, markdown: str) -> str:
 </html>"""
 
 
+def render_doc_nav() -> str:
+    """Links rapidos para as documentacoes principais."""
+    links = "\n".join(
+        f'      <a href="/{escape(path)}">{escape(label)}</a>'
+        for path, label in DOC_NAV_ITEMS
+    )
+    return f"""    <nav class="quick-nav" aria-label="Documentacoes principais">
+{links}
+    </nav>"""
+
+
 def render_documentation_index() -> str:
     """Renderiza pagina inicial com introducao e documentacao geral."""
     _, markdown = read_markdown_document("modelo")
     body = markdown_to_safe_html(markdown)
+    nav = render_doc_nav()
     cards = "\n".join(
         f"""
         <a class="doc-card" href="/documentation/{escape(key)}">
@@ -323,6 +369,31 @@ def render_documentation_index() -> str:
       border: 1px solid #d9e2ec;
       border-radius: 8px;
       padding: 32px;
+    }}
+    .quick-nav {{
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      margin-bottom: 22px;
+      padding-bottom: 18px;
+      border-bottom: 1px solid #d9e2ec;
+    }}
+    .quick-nav a {{
+      display: inline-flex;
+      align-items: center;
+      min-height: 34px;
+      padding: 0 12px;
+      border: 1px solid #d9e2ec;
+      border-radius: 999px;
+      background: #f8fafc;
+      color: #102a43;
+      text-decoration: none;
+      font-size: 14px;
+      font-weight: 800;
+    }}
+    .quick-nav a:hover {{
+      border-color: #0b63ce;
+      color: #0b63ce;
     }}
     .hero {{
       border-bottom: 1px solid #d9e2ec;
@@ -452,6 +523,7 @@ def render_documentation_index() -> str:
 </head>
 <body>
   <main>
+{nav}
     <section class="hero">
       <div class="hero-label">Documentacao do backend</div>
       <h1>CargoLink</h1>
