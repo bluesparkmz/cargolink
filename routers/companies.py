@@ -13,6 +13,7 @@ from controllers.companies_controller import (
     list_companies,
     list_company_drivers,
     list_company_proposals,
+    list_company_trips,
     update_my_company,
 )
 from database import get_db
@@ -25,6 +26,7 @@ from schemas import (
     CompanyProfileUpdateRequest,
     DriverListItem,
     LoadProposalResponse,
+    TripResponse,
 )
 
 router = APIRouter()
@@ -71,6 +73,27 @@ def _proposal_to_response(proposal: LoadProposal) -> LoadProposalResponse:
         message=proposal.message,
         status=proposal.status,
         created_at=proposal.created_at,
+    )
+
+
+def _trip_to_response(trip) -> TripResponse:
+    return TripResponse(
+        id=trip.id,
+        load_id=trip.load_id,
+        company_id=trip.company_id,
+        driver_id=trip.driver_id,
+        vehicle_id=trip.vehicle_id,
+        status=trip.status,
+        started_at=trip.started_at,
+        arrived_at=trip.arrived_at,
+        client_confirmed_at=trip.client_confirmed_at,
+        completed_at=trip.completed_at,
+        total_distance_km=float(trip.total_distance_km) if trip.total_distance_km else None,
+        traveled_distance_km=float(trip.traveled_distance_km)
+        if trip.traveled_distance_km
+        else None,
+        estimated_time=trip.estimated_time,
+        created_at=trip.created_at,
     )
 
 
@@ -130,6 +153,15 @@ def get_my_proposals(
 ):
     """Lista propostas enviadas pela empresa autenticada."""
     return [_proposal_to_response(p) for p in list_company_proposals(db, current_user)]
+
+
+@router.get("/me/trips", response_model=list[TripResponse])
+def get_my_trips(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Lista viagens da empresa autenticada."""
+    return [_trip_to_response(trip) for trip in list_company_trips(db, current_user)]
 
 
 @router.get("", response_model=list[CompanyListItem])

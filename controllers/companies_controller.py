@@ -5,7 +5,7 @@ Controller de empresas transportadoras: perfil, motoristas e propostas.
 from fastapi import HTTPException, status
 from sqlalchemy.orm import Session, joinedload
 
-from models import Company, Driver, LoadProposal, User
+from models import Company, Driver, LoadProposal, Trip, User
 from schemas import CompanyProfileUpdateRequest
 
 
@@ -129,5 +129,16 @@ def list_company_proposals(db: Session, user: User) -> list[LoadProposal]:
         db.query(LoadProposal)
         .filter(LoadProposal.company_id == company.id)
         .order_by(LoadProposal.created_at.desc())
+        .all()
+    )
+
+
+def list_company_trips(db: Session, user: User) -> list[Trip]:
+    """Lista viagens da empresa autenticada."""
+    company = get_my_company(db, user)
+    return (
+        db.query(Trip)
+        .filter(Trip.company_id == company.id)
+        .order_by(Trip.created_at.desc())
         .all()
     )

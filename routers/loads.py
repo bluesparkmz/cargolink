@@ -159,7 +159,7 @@ def submit_proposal(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    """Motorista envia proposta para a carga."""
+    """Empresa envia proposta para a carga."""
     return create_proposal(db, current_user, load_id, data)
 
 
