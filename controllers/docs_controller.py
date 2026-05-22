@@ -2,6 +2,7 @@
 Controller para servir documentacao Markdown como HTML seguro.
 """
 
+import re
 from html import escape
 from pathlib import Path
 
@@ -58,6 +59,12 @@ def markdown_to_safe_html(markdown: str) -> str:
     code_open = False
     code_lines: list[str] = []
 
+    def format_inline(text: str) -> str:
+        safe = escape(text)
+        safe = re.sub(r"`([^`]+)`", r"<code>\1</code>", safe)
+        safe = re.sub(r"\*\*([^*]+)\*\*", r"<strong>\1</strong>", safe)
+        return safe
+
     def flush_paragraph() -> None:
         nonlocal paragraph
         if paragraph:
@@ -105,7 +112,7 @@ def markdown_to_safe_html(markdown: str) -> str:
             close_list()
             level = min(len(stripped) - len(stripped.lstrip("#")), 6)
             text = stripped[level:].strip()
-            html.append(f"<h{level}>{escape(text)}</h{level}>")
+            html.append(f"<h{level}>{format_inline(text)}</h{level}>")
             continue
 
         if stripped.startswith("- "):
@@ -113,10 +120,10 @@ def markdown_to_safe_html(markdown: str) -> str:
             if not list_open:
                 html.append("<ul>")
                 list_open = True
-            html.append(f"<li>{escape(stripped[2:].strip())}</li>")
+            html.append(f"<li>{format_inline(stripped[2:].strip())}</li>")
             continue
 
-        paragraph.append(escape(stripped))
+        paragraph.append(format_inline(stripped))
 
     if code_open:
         flush_code()
