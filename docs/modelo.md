@@ -1,4 +1,55 @@
 # Modelo CargoLink: Cliente, Empresa e Motorista
+
+## O que e o CargoLink
+
+CargoLink e uma plataforma de transporte de cargas que liga clientes que precisam
+enviar mercadorias a empresas transportadoras com camioes e motoristas.
+
+O objetivo do app e organizar todo o fluxo de transporte:
+
+- o cliente publica uma carga;
+- empresas transportadoras analisam a carga e enviam propostas;
+- o cliente compara e aceita uma proposta;
+- a empresa disponibiliza camiao e motorista;
+- o motorista executa a viagem;
+- o cliente acompanha a carga e confirma a entrega.
+
+## O que o app faz
+
+O app suporta tres experiencias principais:
+
+- **Cliente**: publica cargas, recebe propostas, acompanha viagens e confirma entrega.
+- **Empresa transportadora**: gere frota, associa motoristas, envia propostas e acompanha viagens.
+- **Motorista**: ve viagens atribuidas, inicia viagem, envia GPS, regista paragens e confirma chegada.
+
+Tambem existem funcionalidades de apoio:
+
+- mensagens entre utilizadores;
+- notificacoes;
+- documentos;
+- carteira;
+- pagamentos;
+- rastreio por GPS;
+- historico de atividades.
+
+## Como esta feito
+
+O backend e uma API FastAPI com SQLAlchemy e PostgreSQL.
+
+Principais camadas:
+
+```text
+routers      -> endpoints HTTP
+controllers  -> regras de negocio
+schemas      -> validacao e formatos de entrada/saida
+models       -> tabelas e relacoes SQLAlchemy
+database     -> conexao e sessoes da base de dados
+docs         -> documentacao Markdown servida em HTML
+```
+
+As documentacoes ficam em Markdown dentro da pasta `docs/` e sao renderizadas
+em HTML pela rota segura `/documentation`.
+
 Esta documentacao descreve o novo modelo da plataforma depois da separacao entre
 empresa transportadora e motorista.
 ## Ideia principal

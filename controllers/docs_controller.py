@@ -286,10 +286,20 @@ def render_document_page(title: str, markdown: str) -> str:
 
 
 def render_documentation_index() -> str:
-    """Renderiza pagina inicial com links para os documentos permitidos."""
-    items = "\n".join(
-        f'<li><a href="/documentation/{escape(item["key"])}">{escape(item["filename"])}</a></li>'
-        for item in list_documentation()
+    """Renderiza pagina inicial com introducao e documentacao geral."""
+    _, markdown = read_markdown_document("modelo")
+    body = markdown_to_safe_html(markdown)
+    cards = "\n".join(
+        f"""
+        <a class="doc-card" href="/documentation/{escape(key)}">
+          <span>{escape(title)}</span>
+          <small>{escape(description)}</small>
+        </a>"""
+        for key, title, description in (
+            ("company", "Empresa", "Frota, motoristas, propostas e viagens."),
+            ("clients", "Cliente", "Cargas, propostas recebidas, tracking e entrega."),
+            ("driver", "Motorista", "Viagens atribuidas, GPS, paragens e chegada."),
+        )
     )
     return f"""<!doctype html>
 <html lang="pt">
@@ -304,18 +314,73 @@ def render_documentation_index() -> str:
       font-family: Arial, Helvetica, sans-serif;
       background: #f5f7fa;
       color: #1f2933;
+      line-height: 1.55;
     }}
     main {{
-      max-width: 760px;
+      max-width: 980px;
       margin: 0 auto;
       background: #ffffff;
       border: 1px solid #d9e2ec;
       border-radius: 8px;
       padding: 32px;
     }}
-    h1 {{
+    .hero {{
+      border-bottom: 1px solid #d9e2ec;
+      margin-bottom: 28px;
+      padding-bottom: 24px;
+    }}
+    .hero-label {{
+      color: #f59e0b;
+      font-weight: 800;
+      text-transform: uppercase;
+      font-size: 12px;
+      letter-spacing: 0.08em;
+      margin-bottom: 10px;
+    }}
+    h1, h2, h3, h4, h5, h6 {{
       margin-top: 0;
       color: #102a43;
+      line-height: 1.25;
+    }}
+    h1 {{
+      font-size: 34px;
+      margin-bottom: 12px;
+    }}
+    h2 {{
+      margin: 32px 0 12px;
+    }}
+    p, ul {{
+      margin: 0 0 16px;
+    }}
+    .hero p {{
+      max-width: 780px;
+      font-size: 18px;
+    }}
+    .doc-grid {{
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 14px;
+      margin: 22px 0 6px;
+    }}
+    .doc-card {{
+      display: block;
+      border: 1px solid #d9e2ec;
+      border-radius: 8px;
+      padding: 16px;
+      background: #f8fafc;
+    }}
+    .doc-card span {{
+      display: block;
+      color: #102a43;
+      font-size: 18px;
+      font-weight: 800;
+      margin-bottom: 6px;
+    }}
+    .doc-card small {{
+      display: block;
+      color: #52606d;
+      font-size: 14px;
+      line-height: 1.4;
     }}
     a {{
       color: #0b63ce;
@@ -328,15 +393,78 @@ def render_documentation_index() -> str:
     li {{
       margin: 10px 0;
     }}
+    pre {{
+      overflow-x: auto;
+      background: #102a43;
+      color: #f0f4f8;
+      padding: 16px;
+      border-radius: 6px;
+      border: 1px solid #243b53;
+    }}
+    code {{
+      font-family: Consolas, Monaco, monospace;
+      font-size: 14px;
+    }}
+    p code, li code {{
+      background: #e6f6ff;
+      color: #0b4f71;
+      padding: 2px 6px;
+      border-radius: 4px;
+      font-size: 0.92em;
+    }}
+    pre code {{
+      background: transparent;
+      color: inherit;
+      padding: 0;
+      border-radius: 0;
+    }}
+    .tok-key {{
+      color: #7dd3fc;
+    }}
+    .tok-string {{
+      color: #bef264;
+    }}
+    .tok-number {{
+      color: #fbbf24;
+    }}
+    .tok-bool {{
+      color: #f0abfc;
+    }}
+    .tok-method {{
+      color: #fbbf24;
+      font-weight: 700;
+    }}
+    .tok-path {{
+      color: #93c5fd;
+    }}
+    @media (max-width: 760px) {{
+      main {{
+        padding: 22px;
+      }}
+      .doc-grid {{
+        grid-template-columns: 1fr;
+      }}
+      h1 {{
+        font-size: 28px;
+      }}
+    }}
   </style>
 </head>
 <body>
   <main>
-    <h1>Documentacao CargoLink</h1>
-    <p>Escolha um documento:</p>
-    <ul>
-{items}
-    </ul>
+    <section class="hero">
+      <div class="hero-label">Documentacao do backend</div>
+      <h1>CargoLink</h1>
+      <p>
+        Plataforma para ligar clientes que precisam transportar cargas a empresas
+        transportadoras com frota e motoristas, com propostas, viagens, tracking
+        e confirmacao de entrega.
+      </p>
+      <div class="doc-grid">
+{cards}
+      </div>
+    </section>
+{body}
   </main>
 </body>
 </html>"""
