@@ -58,11 +58,52 @@ def markdown_to_safe_html(markdown: str) -> str:
     list_open = False
     code_open = False
     code_lines: list[str] = []
+    code_language = ""
 
     def format_inline(text: str) -> str:
         safe = escape(text)
         safe = re.sub(r"`([^`]+)`", r"<code>\1</code>", safe)
         safe = re.sub(r"\*\*([^*]+)\*\*", r"<strong>\1</strong>", safe)
+        return safe
+
+    def detect_code_language(code: str, language: str) -> str:
+        if language:
+            return language.lower()
+        stripped = code.lstrip()
+        if stripped.startswith("{") or stripped.startswith("["):
+            return "json"
+        if re.match(r"^(GET|POST|PATCH|DELETE|PUT)\s+/", stripped):
+            return "http"
+        return "text"
+
+    def highlight_code(code: str, language: str) -> str:
+        lang = detect_code_language(code, language)
+        safe = escape(code, quote=False)
+
+        if lang == "json":
+            safe = re.sub(
+                r'("(?:\\.|[^"\\])*")(?=\s*:)',
+                r'<span class="tok-key">\1</span>',
+                safe,
+            )
+            safe = re.sub(
+                r'(:\s*)("(?:\\.|[^"\\])*")',
+                r'\1<span class="tok-string">\2</span>',
+                safe,
+            )
+            safe = re.sub(r"\b(true|false|null)\b", r'<span class="tok-bool">\1</span>', safe)
+            safe = re.sub(r"\b(-?\d+(?:\.\d+)?)\b", r'<span class="tok-number">\1</span>', safe)
+            return safe
+
+        if lang == "http":
+            safe = re.sub(
+                r"\b(GET|POST|PATCH|DELETE|PUT)\b",
+                r'<span class="tok-method">\1</span>',
+                safe,
+            )
+            safe = re.sub(r"(/[\w/{}/?.=&:-]*)", r'<span class="tok-path">\1</span>', safe)
+            return safe
+
         return safe
 
     def flush_paragraph() -> None:
@@ -80,7 +121,8 @@ def markdown_to_safe_html(markdown: str) -> str:
     def flush_code() -> None:
         nonlocal code_lines
         code = "\n".join(code_lines)
-        html.append(f"<pre><code>{escape(code)}</code></pre>")
+        highlighted = highlight_code(code, code_language)
+        html.append(f'<pre><code class="language-{escape(code_language or "text")}">{highlighted}</code></pre>')
         code_lines = []
 
     for raw_line in markdown.splitlines():
@@ -94,6 +136,7 @@ def markdown_to_safe_html(markdown: str) -> str:
                 flush_paragraph()
                 close_list()
                 code_open = True
+                code_language = line[3:].strip()
                 code_lines = []
             continue
 
@@ -183,6 +226,7 @@ def render_document_page(title: str, markdown: str) -> str:
       color: #f0f4f8;
       padding: 16px;
       border-radius: 6px;
+      border: 1px solid #243b53;
     }}
     .back-link {{
       display: inline-block;
@@ -197,6 +241,38 @@ def render_document_page(title: str, markdown: str) -> str:
     code {{
       font-family: Consolas, Monaco, monospace;
       font-size: 14px;
+    }}
+    p code, li code {{
+      background: #e6f6ff;
+      color: #0b4f71;
+      padding: 2px 6px;
+      border-radius: 4px;
+      font-size: 0.92em;
+    }}
+    pre code {{
+      background: transparent;
+      color: inherit;
+      padding: 0;
+      border-radius: 0;
+    }}
+    .tok-key {{
+      color: #7dd3fc;
+    }}
+    .tok-string {{
+      color: #bef264;
+    }}
+    .tok-number {{
+      color: #fbbf24;
+    }}
+    .tok-bool {{
+      color: #f0abfc;
+    }}
+    .tok-method {{
+      color: #fbbf24;
+      font-weight: 700;
+    }}
+    .tok-path {{
+      color: #93c5fd;
     }}
   </style>
 </head>
