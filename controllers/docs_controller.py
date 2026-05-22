@@ -184,6 +184,16 @@ def render_document_page(title: str, markdown: str) -> str:
       padding: 16px;
       border-radius: 6px;
     }}
+    .back-link {{
+      display: inline-block;
+      margin-bottom: 24px;
+      color: #0b63ce;
+      text-decoration: none;
+      font-weight: 700;
+    }}
+    .back-link:hover {{
+      text-decoration: underline;
+    }}
     code {{
       font-family: Consolas, Monaco, monospace;
       font-size: 14px;
@@ -192,6 +202,7 @@ def render_document_page(title: str, markdown: str) -> str:
 </head>
 <body>
   <main>
+    <a class="back-link" href="/documentation">&larr; Voltar</a>
 {body}
   </main>
 </body>
