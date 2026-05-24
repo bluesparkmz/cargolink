@@ -59,25 +59,25 @@ def list_load_fill_types():
 
 @router.post("", response_model=LoadDetailResponse, status_code=201)
 def publish_load(
-    load_type: str = Form("mercadoria_geral", description="Tipo de carga"),
-    origin: str = Form("Maputo", description="Origem"),
-    destination: str = Form("Beira", description="Destino"),
-    load_name: str = Form("Carga de teste", description="Nome da carga"),
-    description: str = Form("Descrição padrão de teste", description="Descrição"),
-    weight: float = Form(150, ge=0, description="Peso"),
-    weight_unit: str = Form("ton", description="Unidade: ton ou kg"),
-    volume: float = Form(25, ge=0, description="Volume"),
-    value: float = Form(500000, ge=0, description="Valor"),
-    negotiable: bool = Form(True, description="Negociável"),
-    origin_lat: float = Form(-23.8245, ge=-90, le=90, description="Latitude origem"),
-    origin_lng: float = Form(35.3075, ge=-180, le=180, description="Longitude origem"),
-    destination_lat: float = Form(-19.8432, ge=-90, le=90, description="Latitude destino"),
-    destination_lng: float = Form(34.8386, ge=-180, le=180, description="Longitude destino"),
-    departure_date: date = Form("2026-06-15", description="Data de saída"),
-    load_fill: str = Form("completa", description="Tipo: completa ou meia_carga"),
-    suggested_vehicle_type: str = Form("Camião", description="Tipo de veículo"),
-    instructions: str = Form("Carga frágil - manusejar com cuidado", description="Instruções"),
-    images: list[UploadFile] | None = File(None, description="Até 5 imagens"),
+    load_type: str = Form("mercadoria_geral"),
+    origin: str = Form("Maputo"),
+    destination: str = Form("Beira"),
+    load_name: str = Form("Carga de teste"),
+    description: str = Form("Descrição padrão de teste"),
+    weight: float = Form(150),
+    weight_unit: str = Form("ton"),
+    volume: float = Form(25),
+    value: float = Form(500000),
+    negotiable: bool = Form(True),
+    origin_lat: float = Form(-23.8245),
+    origin_lng: float = Form(35.3075),
+    destination_lat: float = Form(-19.8432),
+    destination_lng: float = Form(34.8386),
+    departure_date: date = Form("2026-06-15"),
+    load_fill: str = Form("completa"),
+    suggested_vehicle_type: str = Form("Camião"),
+    instructions: str = Form("Carga frágil - manusejar com cuidado"),
+    images: list[UploadFile] = File(default=[], description="Até 5 imagens (jpg, png)"),
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
@@ -104,7 +104,7 @@ def publish_load(
     )
     
     image_urls = None
-    if images:
+    if images and len(images) > 0:
         image_urls = [f"uploaded_{file.filename}" for file in images]
     
     return create_load_with_files(db, current_user, form_data, image_urls)
