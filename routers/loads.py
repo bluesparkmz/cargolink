@@ -69,36 +69,29 @@ def publish_load(
 
 @router.post("/form", response_model=LoadDetailResponse, status_code=201)
 def publish_load_form(
-    load_type: str = Form(..., description="Tipo de carga: areia, cimento, cascalho, combustivel, ferro, madeira, graos, mercadoria_geral, outro"),
-    origin: str = Form(..., min_length=2, description="Origem"),
-    destination: str = Form(..., min_length=2, description="Destino"),
-    load_name: str | None = Form(None, description="Nome da carga"),
-    description: str | None = Form(None, description="Descrição"),
-    weight: float | None = Form(None, ge=0, description="Peso"),
-    weight_unit: str = Form("ton", description="Unidade: ton, kg"),
-    volume: float | None = Form(None, ge=0, description="Volume"),
-    value: float | None = Form(None, ge=0, description="Valor"),
+    load_type: str = Form("mercadoria_geral", description="Tipo de carga"),
+    origin: str = Form("Maputo", description="Origem"),
+    destination: str = Form("Beira", description="Destino"),
+    load_name: str = Form("Carga de teste", description="Nome da carga"),
+    description: str = Form("Descrição padrão de teste", description="Descrição"),
+    weight: float = Form(150, ge=0, description="Peso"),
+    weight_unit: str = Form("ton", description="Unidade: ton ou kg"),
+    volume: float = Form(25, ge=0, description="Volume"),
+    value: float = Form(500000, ge=0, description="Valor"),
     negotiable: bool = Form(True, description="Negociável"),
-    origin_lat: float | None = Form(None, ge=-90, le=90),
-    origin_lng: float | None = Form(None, ge=-180, le=180),
-    destination_lat: float | None = Form(None, ge=-90, le=90),
-    destination_lng: float | None = Form(None, ge=-180, le=180),
-    departure_date: date | None = Form(None, description="Data de saída (YYYY-MM-DD)"),
-    load_fill: str | None = Form(None, description="Tipo: completa, meia_carga"),
-    suggested_vehicle_type: str | None = Form(None, description="Tipo de veículo sugerido"),
-    instructions: str | None = Form(None, description="Instruções especiais"),
-    images: list[UploadFile] = File(None, description="Até 5 imagens (jpg, png)"),
+    origin_lat: float = Form(-23.8245, ge=-90, le=90, description="Latitude origem"),
+    origin_lng: float = Form(35.3075, ge=-180, le=180, description="Longitude origem"),
+    destination_lat: float = Form(-19.8432, ge=-90, le=90, description="Latitude destino"),
+    destination_lng: float = Form(34.8386, ge=-180, le=180, description="Longitude destino"),
+    departure_date: date = Form("2026-06-15", description="Data de saída"),
+    load_fill: str = Form("completa", description="Tipo: completa ou meia_carga"),
+    suggested_vehicle_type: str = Form("Camião", description="Tipo de veículo"),
+    instructions: str = Form("Carga frágil - manusejar com cuidado", description="Instruções"),
+    images: list[UploadFile] | None = File(None, description="Até 5 imagens"),
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    """
-    Cliente publica nova carga via multipart/form-data com dropdowns.
-    
-    Vantagens:
-    - Dropdowns para tipos (sem validação de strings)
-    - Upload de imagens direto (jpg, png)
-    - Sem JSON complexo
-    """
+    """Cliente publica carga via multipart/form-data com dados preenchidos por padrão."""
     form_data = LoadCreateRequestForm(
         load_type=load_type,
         load_name=load_name,
@@ -122,7 +115,7 @@ def publish_load_form(
     
     image_urls = None
     if images:
-        image_urls = [file.filename for file in images]
+        image_urls = [f"uploaded_{file.filename}" for file in images]
     
     return create_load_with_files(db, current_user, form_data, image_urls)
 
