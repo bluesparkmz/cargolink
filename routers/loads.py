@@ -6,6 +6,7 @@ from fastapi import APIRouter, Depends, Query, File, UploadFile, Form
 from sqlalchemy.orm import Session
 
 from datetime import date
+from typing import Annotated
 
 from constants import LOAD_FILL_TYPES, LOAD_TYPES
 from controllers.loads_controller import (
@@ -77,7 +78,10 @@ def publish_load(
     load_fill: str = Form("completa"),
     suggested_vehicle_type: str = Form("Camião"),
     instructions: str = Form("Carga frágil - manusejar com cuidado"),
-    images: list[UploadFile] = File(None, description="Até 5 imagens (jpg, png)"),
+    images: Annotated[
+        list[UploadFile] | None,
+        File(description="Até 5 imagens (jpg, png)"),
+    ] = None,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
