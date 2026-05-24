@@ -2,7 +2,9 @@
 Rotas de veiculos: camioes disponiveis e gestao pela empresa.
 """
 
-from fastapi import APIRouter, Depends, Query
+from typing import Annotated
+
+from fastapi import APIRouter, Depends, File, Form, Query, UploadFile
 from sqlalchemy.orm import Session
 
 from controllers.location_controller import resolve_vehicle_coordinates, update_vehicle_location
@@ -73,12 +75,35 @@ def list_my(
 
 @router.post("", response_model=VehicleListItem, status_code=201)
 def create(
-    data: VehicleCreateRequest,
+    plate: str = Form(...),
+    driver_id: int | None = Form(None),
+    brand: str | None = Form(None),
+    model_name: str | None = Form(None),
+    vehicle_type: str | None = Form(None),
+    tonnage_capacity: float | None = Form(None),
+    status: str = Form("disponivel"),
+    current_lat: float | None = Form(None),
+    current_lng: float | None = Form(None),
+    photo: Annotated[
+        UploadFile | None,
+        File(description="Foto do camião (jpg, png)"),
+    ] = None,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    """Empresa regista novo camiao."""
-    vehicle = create_vehicle(db, current_user, data)
+    """Empresa regista novo camiao com foto opcional."""
+    data = VehicleCreateRequest(
+        driver_id=driver_id,
+        plate=plate,
+        brand=brand,
+        model_name=model_name,
+        vehicle_type=vehicle_type,
+        tonnage_capacity=tonnage_capacity,
+        status=status,
+        current_lat=current_lat,
+        current_lng=current_lng,
+    )
+    vehicle = create_vehicle(db, current_user, data, photo_file=photo)
     return _to_list_item(vehicle)
 
 

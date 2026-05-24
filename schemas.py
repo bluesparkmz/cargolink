@@ -763,7 +763,7 @@ class VehicleDetailResponse(VehicleListItem):
 
 
 class VehicleCreateRequest(BaseModel):
-    """Motorista regista novo camião."""
+    """Empresa regista novo camião."""
 
     driver_id: int | None = None
     plate: str = Field(..., min_length=3, max_length=50)

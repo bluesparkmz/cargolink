@@ -334,21 +334,19 @@ Permissao:
 empresa
 ```
 
-Body:
+Body (`multipart/form-data`):
 
-```json
-{
-  "plate": "ABC-123-MP",
-  "brand": "Volvo",
-  "model_name": "FH",
-  "vehicle_type": "Camiao basculante",
-  "tonnage_capacity": 30,
-  "driver_id": 2,
-  "photo": "https://exemplo.com/camiao.jpg",
-  "status": "disponivel",
-  "current_lat": -25.9655,
-  "current_lng": 32.5832
-}
+```text
+plate=ABC-123-MP
+brand=Volvo
+model_name=FH
+vehicle_type=Camiao basculante
+tonnage_capacity=30
+driver_id=2
+photo=<ficheiro jpg/png>
+status=disponivel
+current_lat=-25.9655
+current_lng=32.5832
 ```
 
 Campos obrigatorios:
@@ -365,7 +363,7 @@ brand
 model_name
 vehicle_type
 tonnage_capacity
-photo
+photo (ficheiro jpg/png)
 status
 current_lat
 current_lng
@@ -389,7 +387,7 @@ Resposta:
   "model_name": "FH",
   "vehicle_type": "Camiao basculante",
   "tonnage_capacity": 30,
-  "photo": "https://exemplo.com/camiao.jpg",
+  "photo": "/uploads/vehicles/aa82ce092d4f4c809fd4c6596015897e.png",
   "status": "disponivel",
   "current_lat": -25.9655,
   "current_lng": 32.5832,

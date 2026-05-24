@@ -88,30 +88,50 @@ def custom_openapi():
         description=app.description,
         routes=app.routes,
     )
-    load_request_ref = (
-        openapi_schema.get("paths", {})
-        .get("/loads", {})
-        .get("post", {})
-        .get("requestBody", {})
-        .get("content", {})
-        .get("multipart/form-data", {})
-        .get("schema", {})
-        .get("$ref")
-    )
-    if load_request_ref:
-        schema_name = load_request_ref.rsplit("/", 1)[-1]
+
+    def set_multipart_property(path: str, property_name: str, schema: dict) -> None:
+        request_ref = (
+            openapi_schema.get("paths", {})
+            .get(path, {})
+            .get("post", {})
+            .get("requestBody", {})
+            .get("content", {})
+            .get("multipart/form-data", {})
+            .get("schema", {})
+            .get("$ref")
+        )
+        if not request_ref:
+            return
+
+        schema_name = request_ref.rsplit("/", 1)[-1]
         properties = (
             openapi_schema.get("components", {})
             .get("schemas", {})
             .get(schema_name, {})
             .setdefault("properties", {})
         )
-        properties["images"] = {
+        properties[property_name] = schema
+
+    set_multipart_property(
+        "/loads",
+        "images",
+        {
             "type": "array",
             "items": {"type": "string", "format": "binary"},
             "title": "Images",
             "description": "Até 5 imagens (jpg, png)",
-        }
+        },
+    )
+    set_multipart_property(
+        "/vehicles",
+        "photo",
+        {
+            "type": "string",
+            "format": "binary",
+            "title": "Photo",
+            "description": "Foto do camião (jpg, png)",
+        },
+    )
 
     app.openapi_schema = openapi_schema
     return app.openapi_schema

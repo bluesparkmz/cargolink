@@ -217,16 +217,18 @@ GET    /vehicles
 GET    /vehicles/{vehicle_id}
 ```
 Exemplo de cadastro:
-```json
-{
-  "plate": "ABC-123-MP",
-  "brand": "Volvo",
-  "model_name": "FH",
-  "vehicle_type": "Camiao basculante",
-  "tonnage_capacity": 30,
-  "driver_id": 2,
-  "status": "disponivel"
-}
+```text
+POST /vehicles
+Content-Type: multipart/form-data
+
+plate=ABC-123-MP
+brand=Volvo
+model_name=FH
+vehicle_type=Camiao basculante
+tonnage_capacity=30
+driver_id=2
+photo=<ficheiro jpg/png>
+status=disponivel
 ```
 ## Propostas
 As propostas agora pertencem a empresa transportadora.

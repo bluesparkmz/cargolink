@@ -2,16 +2,27 @@
 Controller de veiculos (camioes).
 """
 
+import shutil
+import uuid
 from decimal import Decimal
+from pathlib import Path
 
-from fastapi import HTTPException, status
+from fastapi import HTTPException, UploadFile, status
 from sqlalchemy import or_
 from sqlalchemy.orm import Session, joinedload
 
+from config import settings
 from constants import VEHICLE_STATUSES, VEHICLE_STATUS_INACTIVE
 from controllers.drivers_controller import get_my_driver
 from models import Company, Driver, User, Vehicle
 from schemas import VehicleCreateRequest, VehicleUpdateRequest
+
+ALLOWED_VEHICLE_IMAGE_TYPES = {
+    "image/jpeg": ".jpg",
+    "image/jpg": ".jpg",
+    "image/png": ".png",
+}
+VEHICLE_UPLOAD_DIR = "uploads/vehicles"
 
 
 def get_my_company(db: Session, user: User) -> Company:
@@ -140,7 +151,37 @@ def _normalize_vehicle_payload(payload: dict) -> dict:
     return payload
 
 
-def create_vehicle(db: Session, user: User, data: VehicleCreateRequest) -> Vehicle:
+def save_vehicle_photo(file: UploadFile | None) -> str | None:
+    """Guarda foto do camiao no volume persistente e devolve URL pública."""
+    if file is None:
+        return None
+
+    extension = ALLOWED_VEHICLE_IMAGE_TYPES.get(file.content_type or "")
+    if not extension:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Foto invalida. Envie apenas ficheiros JPG ou PNG.",
+        )
+
+    upload_dir = Path(settings.STORAGE_DIR) / VEHICLE_UPLOAD_DIR
+    upload_dir.mkdir(parents=True, exist_ok=True)
+
+    filename = f"{uuid.uuid4().hex}{extension}"
+    file_path = upload_dir / filename
+
+    file.file.seek(0)
+    with file_path.open("wb") as destination:
+        shutil.copyfileobj(file.file, destination)
+
+    return f"/{VEHICLE_UPLOAD_DIR}/{filename}"
+
+
+def create_vehicle(
+    db: Session,
+    user: User,
+    data: VehicleCreateRequest,
+    photo_file: UploadFile | None = None,
+) -> Vehicle:
     """Empresa regista novo camiao e pode atribuir motorista."""
     company = get_my_company(db, user)
     _validate_vehicle_status(data.status)
@@ -155,6 +196,8 @@ def create_vehicle(db: Session, user: User, data: VehicleCreateRequest) -> Vehic
 
     payload = _normalize_vehicle_payload(data.model_dump())
     payload["plate"] = data.plate.strip().upper()
+    if photo_file is not None:
+        payload["photo"] = save_vehicle_photo(photo_file)
 
     vehicle = Vehicle(company_id=company.id, **payload)
     db.add(vehicle)
