@@ -59,16 +59,6 @@ def list_load_fill_types():
 
 @router.post("", response_model=LoadDetailResponse, status_code=201)
 def publish_load(
-    data: LoadCreateRequest,
-    current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db),
-):
-    """Cliente publica nova carga (dados + até 5 imagens)."""
-    return create_load(db, current_user, data)
-
-
-@router.post("/form", response_model=LoadDetailResponse, status_code=201)
-def publish_load_form(
     load_type: str = Form("mercadoria_geral", description="Tipo de carga"),
     origin: str = Form("Maputo", description="Origem"),
     destination: str = Form("Beira", description="Destino"),
@@ -91,7 +81,7 @@ def publish_load_form(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    """Cliente publica carga via multipart/form-data com dados preenchidos por padrão."""
+    """Cliente publica carga com multipart/form-data (dropdowns + upload de imagens)."""
     form_data = LoadCreateRequestForm(
         load_type=load_type,
         load_name=load_name,
