@@ -22,6 +22,7 @@ class Settings:
     ALGORITHM: str
     ACCESS_TOKEN_EXPIRE_MINUTES: int
     AUTO_CONFIRM_MPESA_DEPOSITS: bool
+    STORAGE_DIR: str
 
 
 settings = Settings()
@@ -30,3 +31,4 @@ settings.SECRET_KEY = os.getenv("SECRET_KEY", "altere-esta-chave-em-producao")
 settings.ALGORITHM = os.getenv("ALGORITHM", "HS256")
 settings.ACCESS_TOKEN_EXPIRE_MINUTES = _env_int("ACCESS_TOKEN_EXPIRE_MINUTES", 60 * 24)
 settings.AUTO_CONFIRM_MPESA_DEPOSITS = _env_bool("AUTO_CONFIRM_MPESA_DEPOSITS", True)
+settings.STORAGE_DIR = os.getenv("STORAGE_DIR", "/storage")

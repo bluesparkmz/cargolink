@@ -107,11 +107,7 @@ def publish_load(
         instructions=instructions,
     )
     
-    image_urls = None
-    if images:
-        image_urls = [f"uploaded_{file.filename}" for file in images]
-    
-    return create_load_with_files(db, current_user, form_data, image_urls)
+    return create_load_with_files(db, current_user, form_data, images)
 
 
 @router.get("", response_model=list[LoadListItem])

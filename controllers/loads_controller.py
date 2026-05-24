@@ -3,14 +3,17 @@ Controller de cargas: publicar, listar, imagens e propostas.
 """
 
 import math
+import shutil
 import uuid
 from datetime import date
 from decimal import Decimal
+from pathlib import Path
 
-from fastapi import HTTPException, status
+from fastapi import HTTPException, UploadFile, status
 from sqlalchemy import func
 from sqlalchemy.orm import Session, joinedload
 
+from config import settings
 from constants import (
     LOAD_FILL_IDS,
     LOAD_FILL_LABELS,
@@ -35,10 +38,35 @@ from schemas import (
     LoadUpdateRequest,
 )
 
+ALLOWED_LOAD_IMAGE_TYPES = {"image/jpeg": ".jpg", "image/png": ".png"}
+LOAD_UPLOAD_DIR = "uploads/loads"
+
 
 def _generate_load_code() -> str:
     """Gera código único para a carga."""
     return f"CL-{uuid.uuid4().hex[:8].upper()}"
+
+
+def _save_load_image(file: UploadFile) -> str:
+    """Guarda imagem da carga no volume persistente e devolve URL pública."""
+    extension = ALLOWED_LOAD_IMAGE_TYPES.get(file.content_type or "")
+    if not extension:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Imagem invÃ¡lida. Envie apenas ficheiros JPG ou PNG.",
+        )
+
+    upload_dir = Path(settings.STORAGE_DIR) / LOAD_UPLOAD_DIR
+    upload_dir.mkdir(parents=True, exist_ok=True)
+
+    filename = f"{uuid.uuid4().hex}{extension}"
+    file_path = upload_dir / filename
+
+    file.file.seek(0)
+    with file_path.open("wb") as destination:
+        shutil.copyfileobj(file.file, destination)
+
+    return f"/{LOAD_UPLOAD_DIR}/{filename}"
 
 
 def _validate_load_type(load_type: str) -> None:
@@ -352,7 +380,7 @@ def create_load_with_files(
     db: Session,
     user: User,
     data: LoadCreateRequestForm,
-    image_files: list | None = None,
+    image_files: list[UploadFile] | None = None,
 ) -> LoadDetailResponse:
     """Cliente publica nova carga via multipart/form-data com files de imagens."""
     client = get_client_or_403(db, user)
@@ -378,9 +406,10 @@ def create_load_with_files(
     if image_files:
         images = []
         for idx, file in enumerate(image_files):
+            image_url = _save_load_image(file)
             image_obj = LoadImage(
                 load_id=load.id,
-                image_url=file,
+                image_url=image_url,
                 is_primary=(idx == 0),
             )
             images.append(image_obj)

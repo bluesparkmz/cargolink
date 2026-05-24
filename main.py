@@ -8,7 +8,9 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.openapi.utils import get_openapi
+from fastapi.staticfiles import StaticFiles
 
+from config import settings
 from database import Base, engine
 from routers.auth import router as auth_router
 from routers.clients import router as clients_router
@@ -50,6 +52,12 @@ app.add_middleware(
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
+)
+
+app.mount(
+    "/uploads",
+    StaticFiles(directory=f"{settings.STORAGE_DIR}/uploads", check_dir=False),
+    name="uploads",
 )
 
 # Cada router é registado aqui, um ficheiro por domínio
