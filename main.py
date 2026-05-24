@@ -7,6 +7,7 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.openapi.utils import get_openapi
 
 from database import Base, engine
 from routers.auth import router as auth_router
@@ -67,6 +68,48 @@ app.include_router(vehicles_router, prefix="/vehicles", tags=["Vehicles"])
 app.include_router(wallet_router, prefix="/wallet", tags=["Wallet"])
 app.include_router(notifications_router, prefix="/notifications", tags=["Notifications"])
 app.include_router(messages_router, prefix="/messages", tags=["Messages"])
+
+
+def custom_openapi():
+    if app.openapi_schema:
+        return app.openapi_schema
+
+    openapi_schema = get_openapi(
+        title=app.title,
+        version=app.version,
+        description=app.description,
+        routes=app.routes,
+    )
+    load_request_ref = (
+        openapi_schema.get("paths", {})
+        .get("/loads", {})
+        .get("post", {})
+        .get("requestBody", {})
+        .get("content", {})
+        .get("multipart/form-data", {})
+        .get("schema", {})
+        .get("$ref")
+    )
+    if load_request_ref:
+        schema_name = load_request_ref.rsplit("/", 1)[-1]
+        properties = (
+            openapi_schema.get("components", {})
+            .get("schemas", {})
+            .get(schema_name, {})
+            .setdefault("properties", {})
+        )
+        properties["images"] = {
+            "type": "array",
+            "items": {"type": "string", "format": "binary"},
+            "title": "Images",
+            "description": "Até 5 imagens (jpg, png)",
+        }
+
+    app.openapi_schema = openapi_schema
+    return app.openapi_schema
+
+
+app.openapi = custom_openapi
 
 
 @app.get("/")
