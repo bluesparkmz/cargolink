@@ -22,6 +22,7 @@ from routers.loads import router as loads_router
 from routers.driver_trips import router as driver_trips_router
 from routers.messages import router as messages_router
 from routers.notifications import router as notifications_router
+from routers.proposals import router as proposals_router
 from routers.stats import router as stats_router
 from routers.trips import router as trips_router
 from routers.users import router as users_router
@@ -69,6 +70,7 @@ app.include_router(documents_router, prefix="/documents", tags=["Documents"])
 app.include_router(documentation_router, prefix="/documentation", tags=["Documentation"])
 app.include_router(drivers_router, prefix="/drivers", tags=["Drivers"])
 app.include_router(loads_router, prefix="/loads", tags=["Loads"])
+app.include_router(proposals_router, prefix="/proposals", tags=["Proposals"])
 app.include_router(trips_router, prefix="/trips", tags=["Trips"])
 app.include_router(driver_trips_router, prefix="/driver/trips", tags=["Driver"])
 app.include_router(stats_router, prefix="/stats", tags=["Stats"])
