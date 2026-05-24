@@ -2,7 +2,7 @@
 Rotas de cargas: publicar, consultar, imagens e propostas.
 """
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, Query, File, UploadFile, Form
 from sqlalchemy.orm import Session
 
 from datetime import date
@@ -12,6 +12,7 @@ from controllers.loads_controller import (
     accept_proposal,
     add_load_image,
     create_load,
+    create_load_with_files,
     create_proposal,
     delete_load,
     get_load_detail_response,
@@ -27,6 +28,7 @@ from database import get_db
 from models import User
 from schemas import (
     LoadCreateRequest,
+    LoadCreateRequestForm,
     LoadDetailResponse,
     LoadImageCreateRequest,
     LoadImageResponse,
@@ -63,6 +65,66 @@ def publish_load(
 ):
     """Cliente publica nova carga (dados + até 5 imagens)."""
     return create_load(db, current_user, data)
+
+
+@router.post("/form", response_model=LoadDetailResponse, status_code=201)
+def publish_load_form(
+    load_type: str = Form(..., description="Tipo de carga: areia, cimento, cascalho, combustivel, ferro, madeira, graos, mercadoria_geral, outro"),
+    origin: str = Form(..., min_length=2, description="Origem"),
+    destination: str = Form(..., min_length=2, description="Destino"),
+    load_name: str | None = Form(None, description="Nome da carga"),
+    description: str | None = Form(None, description="Descrição"),
+    weight: float | None = Form(None, ge=0, description="Peso"),
+    weight_unit: str = Form("ton", description="Unidade: ton, kg"),
+    volume: float | None = Form(None, ge=0, description="Volume"),
+    value: float | None = Form(None, ge=0, description="Valor"),
+    negotiable: bool = Form(True, description="Negociável"),
+    origin_lat: float | None = Form(None, ge=-90, le=90),
+    origin_lng: float | None = Form(None, ge=-180, le=180),
+    destination_lat: float | None = Form(None, ge=-90, le=90),
+    destination_lng: float | None = Form(None, ge=-180, le=180),
+    departure_date: date | None = Form(None, description="Data de saída (YYYY-MM-DD)"),
+    load_fill: str | None = Form(None, description="Tipo: completa, meia_carga"),
+    suggested_vehicle_type: str | None = Form(None, description="Tipo de veículo sugerido"),
+    instructions: str | None = Form(None, description="Instruções especiais"),
+    images: list[UploadFile] = File(None, description="Até 5 imagens (jpg, png)"),
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """
+    Cliente publica nova carga via multipart/form-data com dropdowns.
+    
+    Vantagens:
+    - Dropdowns para tipos (sem validação de strings)
+    - Upload de imagens direto (jpg, png)
+    - Sem JSON complexo
+    """
+    form_data = LoadCreateRequestForm(
+        load_type=load_type,
+        load_name=load_name,
+        description=description,
+        weight=weight,
+        weight_unit=weight_unit,
+        volume=volume,
+        value=value,
+        negotiable=negotiable,
+        origin=origin,
+        destination=destination,
+        origin_lat=origin_lat,
+        origin_lng=origin_lng,
+        destination_lat=destination_lat,
+        destination_lng=destination_lng,
+        departure_date=departure_date,
+        load_fill=load_fill,
+        suggested_vehicle_type=suggested_vehicle_type,
+        instructions=instructions,
+    )
+    
+    image_urls = None
+    if images:
+        image_urls = [file.filename for file in images]
+    
+    return create_load_with_files(db, current_user, form_data, image_urls)
 
 
 @router.get("", response_model=list[LoadListItem])

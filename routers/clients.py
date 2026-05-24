@@ -12,6 +12,7 @@ from controllers.clients_controller import (
     get_my_client,
     list_clients,
     update_my_client,
+    convert_client_to_company,
 )
 from deps import get_current_user
 from database import get_db
@@ -22,6 +23,8 @@ from schemas import (
     ClientListItem,
     ClientProfileUpdateRequest,
     ClientStatsResponse,
+    ConvertClientToCompanyRequest,
+    CompanyDetailResponse,
 )
 
 router = APIRouter()
@@ -96,3 +99,24 @@ def get_by_id(
 ):
     """Consulta cliente por id."""
     return get_client_by_id(db, client_id)
+
+
+@router.post("/convert-to-company", response_model=CompanyDetailResponse, status_code=201)
+def convert_to_company(
+    data: ConvertClientToCompanyRequest,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """
+    Converte perfil cliente do utilizador para empresa transportadora.
+    
+    Requer:
+    - Utilizador autenticado com tipo = cliente
+    - Dados obrigatórios: company_name
+    
+    Resultado:
+    - Muda user_type para "empresa"
+    - Cria novo perfil Company
+    - Retorna dados da empresa criada
+    """
+    return convert_client_to_company(db, current_user, data)

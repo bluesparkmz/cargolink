@@ -5,8 +5,8 @@ Controller de clientes: perfil e listagem.
 from fastapi import HTTPException, status
 from sqlalchemy.orm import Session, joinedload
 
-from models import Client, User
-from schemas import ClientProfileUpdateRequest
+from models import Client, Company, User
+from schemas import ClientProfileUpdateRequest, ConvertClientToCompanyRequest
 
 
 def require_client(user: User) -> None:
@@ -65,3 +65,45 @@ def update_my_client(db: Session, user: User, data: ClientProfileUpdateRequest) 
     db.commit()
     db.refresh(client)
     return get_client_by_id(db, client.id)
+
+
+def convert_client_to_company(db: Session, user: User, data: ConvertClientToCompanyRequest) -> Company:
+    """
+    Converte utilizador cliente para empresa transportadora.
+    
+    Operações:
+    - Valida que é cliente
+    - Muda user.user_type para "empresa"
+    - Cria novo perfil Company
+    - Mantém histórico do perfil Client
+    """
+    require_client(user)
+    
+    # Verifica se já tem um perfil de empresa
+    existing_company = db.query(Company).filter(Company.user_id == user.id).first()
+    if existing_company:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Utilizador já é uma empresa transportadora",
+        )
+    
+    # Muda tipo de utilizador para empresa
+    user.user_type = "empresa"
+    
+    # Cria novo perfil de empresa
+    company = Company(
+        user_id=user.id,
+        company_name=data.company_name,
+        tax_id=data.tax_id,
+        license_number=data.license_number,
+        address=data.address,
+        city=data.city,
+        state=data.state,
+    )
+    db.add(company)
+    db.commit()
+    db.refresh(company)
+    db.refresh(user)
+    
+    return company
+

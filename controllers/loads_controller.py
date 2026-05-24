@@ -25,6 +25,7 @@ from models import Client, Company, Driver, Load, LoadImage, LoadProposal, Ratin
 from controllers.trips_controller import _user_can_access_trip
 from schemas import (
     LoadCreateRequest,
+    LoadCreateRequestForm,
     LoadDetailResponse,
     LoadImageCreateRequest,
     LoadImageResponse,
@@ -342,6 +343,48 @@ def create_load(db: Session, user: User, data: LoadCreateRequest) -> LoadDetailR
 
     if images:
         _attach_images(db, load, images)
+
+    db.commit()
+    return get_load_detail_response(db, load.id)
+
+
+def create_load_with_files(
+    db: Session,
+    user: User,
+    data: LoadCreateRequestForm,
+    image_files: list | None = None,
+) -> LoadDetailResponse:
+    """Cliente publica nova carga via multipart/form-data com files de imagens."""
+    client = get_client_or_403(db, user)
+    _validate_load_type(data.load_type)
+    _validate_weight_unit(data.weight_unit)
+    _validate_load_fill(data.load_fill)
+
+    if image_files and len(image_files) > MAX_LOAD_IMAGES:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Máximo de {MAX_LOAD_IMAGES} imagens por carga",
+        )
+
+    payload = data.model_dump()
+    load = Load(
+        client_id=client.id,
+        code=_generate_load_code(),
+        **payload,
+    )
+    db.add(load)
+    db.flush()
+
+    if image_files:
+        images = []
+        for idx, file in enumerate(image_files):
+            image_obj = LoadImage(
+                load_id=load.id,
+                image_url=file,
+                is_primary=(idx == 0),
+            )
+            images.append(image_obj)
+        db.add_all(images)
 
     db.commit()
     return get_load_detail_response(db, load.id)

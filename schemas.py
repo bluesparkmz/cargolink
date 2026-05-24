@@ -214,6 +214,17 @@ class ClientStatsResponse(BaseModel):
     rating_count: int = 0
 
 
+class ConvertClientToCompanyRequest(BaseModel):
+    """Converter perfil cliente para empresa transportadora."""
+
+    company_name: str = Field(..., min_length=2, max_length=150)
+    tax_id: str | None = None
+    license_number: str | None = None
+    address: str | None = None
+    city: str | None = None
+    state: str | None = None
+
+
 class AvailabilityUpdateRequest(BaseModel):
     """Alterar disponibilidade do motorista."""
 
@@ -377,6 +388,39 @@ class LoadCreateRequest(BaseModel):
     suggested_vehicle_type: str | None = Field(None, max_length=150)
     instructions: str | None = None
     images: list[LoadImageCreateRequest] | None = None
+
+
+class LoadCreateRequestForm(BaseModel):
+    """Publicar nova carga via multipart/form-data (dropdowns)."""
+
+    load_type: Literal[
+        "areia",
+        "cimento",
+        "cascalho",
+        "combustivel",
+        "ferro",
+        "madeira",
+        "graos",
+        "mercadoria_geral",
+        "outro",
+    ] = Field(..., description="Tipo de carga")
+    load_name: str | None = Field(None, max_length=150)
+    description: str | None = Field(None, description="Descrição da carga")
+    weight: float | None = Field(None, ge=0, description="Peso")
+    weight_unit: Literal["ton", "kg"] = Field("ton", description="Unidade de peso")
+    volume: float | None = Field(None, ge=0, description="Volume")
+    value: float | None = Field(None, ge=0, description="Valor")
+    negotiable: bool = Field(True, description="Negociável")
+    origin: str = Field(..., min_length=2, max_length=150, description="Origem")
+    destination: str = Field(..., min_length=2, max_length=150, description="Destino")
+    origin_lat: float | None = Field(None, ge=-90, le=90)
+    origin_lng: float | None = Field(None, ge=-180, le=180)
+    destination_lat: float | None = Field(None, ge=-90, le=90)
+    destination_lng: float | None = Field(None, ge=-180, le=180)
+    departure_date: date | None = Field(None, description="Data de saída (YYYY-MM-DD)")
+    load_fill: Literal["completa", "meia_carga"] | None = Field(None, description="Tipo de carga")
+    suggested_vehicle_type: str | None = Field(None, max_length=150)
+    instructions: str | None = Field(None, description="Instruções especiais")
 
 
 class LoadUpdateRequest(BaseModel):
