@@ -80,7 +80,7 @@ def create(
     brand: str | None = Form(None),
     model_name: str | None = Form(None),
     vehicle_type: str | None = Form(None),
-    tonnage_capacity: float | None = Form(None),
+    tonnage_capacity: float | None = Form(None, gt=0),
     status: str = Form("disponivel"),
     current_lat: float | None = Form(None),
     current_lng: float | None = Form(None),
