@@ -34,8 +34,9 @@ def frontend_test():
 <main>
   <h1>CargoLink API Test</h1>
   <p>Token guardado: <code id="tokenState">nao</code></p>
+  <p>Estado: <strong id="statusMessage">Pronto</strong></p>
   <div class="row">
-    <button type="button" onclick="authMe()">GET /auth/me</button>
+    <button type="button" onclick="safeRun(authMe)">GET /auth/me</button>
     <button type="button" onclick="clearToken()">Limpar token</button>
     <a href="/docs">OpenAPI</a>
     <a href="/documentation/proposals">Docs propostas</a>
@@ -75,8 +76,8 @@ def frontend_test():
   <section>
     <h2>Veiculos</h2>
     <div class="row">
-      <button type="button" onclick="api('/vehicles/me')">GET /vehicles/me</button>
-      <button type="button" onclick="api('/vehicles')">GET /vehicles</button>
+      <button type="button" onclick="safeRun(() => api('/vehicles/me'))">GET /vehicles/me</button>
+      <button type="button" onclick="safeRun(() => api('/vehicles'))">GET /vehicles</button>
     </div>
     <form onsubmit="createVehicle(event)">
       <h3>POST /vehicles</h3>
@@ -99,10 +100,10 @@ def frontend_test():
   <section>
     <h2>Cargas</h2>
     <div class="row">
-      <button type="button" onclick="api('/loads/types', { auth: false })">GET /loads/types</button>
-      <button type="button" onclick="api('/loads/fill-types', { auth: false })">GET /loads/fill-types</button>
-      <button type="button" onclick="api('/loads')">GET /loads</button>
-      <button type="button" onclick="api('/loads/me')">GET /loads/me</button>
+      <button type="button" onclick="safeRun(() => api('/loads/types', { auth: false }))">GET /loads/types</button>
+      <button type="button" onclick="safeRun(() => api('/loads/fill-types', { auth: false }))">GET /loads/fill-types</button>
+      <button type="button" onclick="safeRun(() => api('/loads'))">GET /loads</button>
+      <button type="button" onclick="safeRun(() => api('/loads/me'))">GET /loads/me</button>
     </div>
     <form onsubmit="createLoad(event)">
       <h3>POST /loads</h3>
@@ -172,8 +173,8 @@ def frontend_test():
       </form>
     </div>
     <div class="row">
-      <button type="button" onclick="api('/proposals/me')">GET /proposals/me</button>
-      <button type="button" onclick="api('/proposals/received')">GET /proposals/received</button>
+      <button type="button" onclick="safeRun(() => api('/proposals/me'))">GET /proposals/me</button>
+      <button type="button" onclick="safeRun(() => api('/proposals/received'))">GET /proposals/received</button>
     </div>
   </section>
 
@@ -206,6 +207,7 @@ def frontend_test():
 const tokenKey = "cargolink_test_token";
 const result = document.getElementById("result");
 const tokenState = document.getElementById("tokenState");
+const statusMessage = document.getElementById("statusMessage");
 
 function getToken() {
   return localStorage.getItem(tokenKey) || "";
@@ -214,20 +216,36 @@ function getToken() {
 function setToken(token) {
   localStorage.setItem(tokenKey, token);
   updateTokenState();
+  setStatus("Token guardado com sucesso");
 }
 
 function clearToken() {
   localStorage.removeItem(tokenKey);
   updateTokenState();
+  setStatus("Token removido");
   write({ message: "Token removido" });
 }
 
 function updateTokenState() {
-  tokenState.textContent = getToken() ? "sim" : "nao";
+  const token = getToken();
+  tokenState.textContent = token ? "sim (" + token.slice(0, 18) + "...)" : "nao";
 }
 
 function write(data) {
   result.textContent = typeof data === "string" ? data : JSON.stringify(data, null, 2);
+}
+
+function setStatus(message) {
+  statusMessage.textContent = message;
+}
+
+async function safeRun(fn) {
+  try {
+    await fn();
+  } catch (error) {
+    setStatus(error.message || "Erro inesperado");
+    write({ error: error.message || String(error) });
+  }
 }
 
 function formObject(form) {
@@ -253,6 +271,7 @@ async function api(path, options = {}) {
   const method = options.method || "GET";
   const headers = options.headers || {};
   const useAuth = options.auth !== false;
+  setStatus("A enviar " + method + " " + path + "...");
   if (useAuth && getToken()) headers.Authorization = "Bearer " + getToken();
   if (options.json !== undefined) headers["Content-Type"] = "application/json";
 
@@ -264,22 +283,39 @@ async function api(path, options = {}) {
   const contentType = res.headers.get("content-type") || "";
   const body = contentType.includes("application/json") ? await res.json() : await res.text();
   write({ status: res.status, ok: res.ok, body });
-  if (!res.ok) throw new Error("HTTP " + res.status);
+  if (!res.ok) {
+    const detail = body && body.detail ? body.detail : "HTTP " + res.status;
+    setStatus("Erro: " + detail);
+    return body;
+  }
+  setStatus("Sucesso: " + method + " " + path);
   return body;
 }
 
 async function registerUser(event) {
   event.preventDefault();
-  const body = formObject(event.target);
-  if (body.user_type !== "empresa") delete body.company_name;
-  const data = await api("/auth/register", { method: "POST", json: body, auth: false });
-  if (data.access_token) setToken(data.access_token);
+  await safeRun(async () => {
+    const body = formObject(event.target);
+    if (body.user_type !== "empresa") delete body.company_name;
+    const data = await api("/auth/register", { method: "POST", json: body, auth: false });
+    if (data.access_token) {
+      setToken(data.access_token);
+      setStatus("Cadastro feito, token guardado");
+      await api("/auth/me");
+    }
+  });
 }
 
 async function loginUser(event) {
   event.preventDefault();
-  const data = await api("/auth/login", { method: "POST", json: formObject(event.target), auth: false });
-  if (data.access_token) setToken(data.access_token);
+  await safeRun(async () => {
+    const data = await api("/auth/login", { method: "POST", json: formObject(event.target), auth: false });
+    if (data.access_token) {
+      setToken(data.access_token);
+      setStatus("Login feito, token guardado");
+      await api("/auth/me");
+    }
+  });
 }
 
 async function authMe() {
@@ -288,66 +324,78 @@ async function authMe() {
 
 async function createVehicle(event) {
   event.preventDefault();
-  const form = new FormData(event.target);
-  for (const [key, value] of [...form.entries()]) {
-    if (value === "" || (value instanceof File && !value.name)) form.delete(key);
-  }
-  await api("/vehicles", { method: "POST", body: form });
+  await safeRun(async () => {
+    const form = new FormData(event.target);
+    for (const [key, value] of [...form.entries()]) {
+      if (value === "" || (value instanceof File && !value.name)) form.delete(key);
+    }
+    await api("/vehicles", { method: "POST", body: form });
+  });
 }
 
 async function createLoad(event) {
   event.preventDefault();
-  const form = new FormData(event.target);
-  for (const [key, value] of [...form.entries()]) {
-    if (value === "" || (value instanceof File && !value.name)) form.delete(key);
-  }
-  await api("/loads", { method: "POST", body: form });
+  await safeRun(async () => {
+    const form = new FormData(event.target);
+    for (const [key, value] of [...form.entries()]) {
+      if (value === "" || (value instanceof File && !value.name)) form.delete(key);
+    }
+    await api("/loads", { method: "POST", body: form });
+  });
 }
 
 async function sendProposal(event) {
   event.preventDefault();
-  const data = formObject(event.target);
-  const loadId = data.load_id;
-  delete data.load_id;
-  await api("/proposals/loads/" + loadId, { method: "POST", json: data });
+  await safeRun(async () => {
+    const data = formObject(event.target);
+    const loadId = data.load_id;
+    delete data.load_id;
+    await api("/proposals/loads/" + loadId, { method: "POST", json: data });
+  });
 }
 
 async function counterOffer(event) {
   event.preventDefault();
-  const data = formObject(event.target);
-  const proposalId = data.proposal_id;
-  delete data.proposal_id;
-  await api("/proposals/" + proposalId + "/negotiations", { method: "POST", json: data });
+  await safeRun(async () => {
+    const data = formObject(event.target);
+    const proposalId = data.proposal_id;
+    delete data.proposal_id;
+    await api("/proposals/" + proposalId + "/negotiations", { method: "POST", json: data });
+  });
 }
 
 async function proposalAction(event) {
   event.preventDefault();
-  const action = event.submitter.value;
-  const data = formObject(event.target);
-  const proposalId = data.proposal_id;
-  const negotiationId = data.negotiation_id;
-  const map = {
-    "proposal-detail": ["GET", "/proposals/" + proposalId],
-    "proposal-accept": ["POST", "/proposals/" + proposalId + "/accept"],
-    "proposal-reject": ["POST", "/proposals/" + proposalId + "/reject"],
-    "negotiations": ["GET", "/proposals/" + proposalId + "/negotiations"],
-    "negotiation-accept": ["POST", "/proposals/" + proposalId + "/negotiations/" + negotiationId + "/accept"],
-    "negotiation-reject": ["POST", "/proposals/" + proposalId + "/negotiations/" + negotiationId + "/reject"],
-  };
-  const [method, path] = map[action];
-  await api(path, { method });
+  await safeRun(async () => {
+    const action = event.submitter.value;
+    const data = formObject(event.target);
+    const proposalId = data.proposal_id;
+    const negotiationId = data.negotiation_id;
+    const map = {
+      "proposal-detail": ["GET", "/proposals/" + proposalId],
+      "proposal-accept": ["POST", "/proposals/" + proposalId + "/accept"],
+      "proposal-reject": ["POST", "/proposals/" + proposalId + "/reject"],
+      "negotiations": ["GET", "/proposals/" + proposalId + "/negotiations"],
+      "negotiation-accept": ["POST", "/proposals/" + proposalId + "/negotiations/" + negotiationId + "/accept"],
+      "negotiation-reject": ["POST", "/proposals/" + proposalId + "/negotiations/" + negotiationId + "/reject"],
+    };
+    const [method, path] = map[action];
+    await api(path, { method });
+  });
 }
 
 async function manualRequest(event) {
   event.preventDefault();
-  const form = event.target;
-  const method = form.method.value;
-  const path = form.path.value;
-  let body;
-  if (method !== "GET" && method !== "DELETE") {
-    body = JSON.parse(form.body.value || "{}");
-  }
-  await api(path, { method, json: body });
+  await safeRun(async () => {
+    const form = event.target;
+    const method = form.method.value;
+    const path = form.path.value;
+    let body;
+    if (method !== "GET" && method !== "DELETE") {
+      body = JSON.parse(form.body.value || "{}");
+    }
+    await api(path, { method, json: body });
+  });
 }
 
 updateTokenState();
