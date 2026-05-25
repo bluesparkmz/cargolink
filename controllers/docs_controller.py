@@ -399,6 +399,13 @@ def render_documentation_index() -> str:
             ("proposals", "Propostas", "Envio, contrapropostas, aceite e recusa."),
         )
     )
+    proposals_notice = """
+      <section class="doc-highlight">
+        <h2>Documentacao de Propostas</h2>
+        <p>A parte de propostas e negociacao esta disponivel numa pagina propria com envio de propostas, contrapropostas, aceite e recusa.</p>
+        <a href="/documentation/proposals">Abrir documentacao de propostas</a>
+      </section>
+"""
     return f"""<!doctype html>
 <html lang="pt">
 <head>
@@ -504,6 +511,15 @@ def render_documentation_index() -> str:
       color: #52606d;
       font-size: 14px;
       line-height: 1.4;
+    }}
+    .doc-highlight {{
+      border: 1px solid #d9e2ec;
+      border-radius: 6px;
+      padding: 16px;
+      margin: 20px 0;
+    }}
+    .doc-highlight h2 {{
+      margin-top: 0;
     }}
     a {{
       color: #0b63ce;
@@ -614,6 +630,7 @@ def render_documentation_index() -> str:
         transportadoras com frota e motoristas, com propostas, viagens, tracking
         e confirmacao de entrega.
       </p>
+{proposals_notice}
       <div class="doc-grid">
 {cards}
       </div>
