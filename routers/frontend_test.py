@@ -133,6 +133,8 @@ def frontend_test():
       background: var(--panel);
       color: var(--text);
       padding: 12px;
+      max-height: 90vh;
+      overflow-y: auto;
     }
     dialog::backdrop { background: rgb(0 0 0 / 0.65); }
     .dialog-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
@@ -226,6 +228,51 @@ def frontend_test():
     <div class="row">
       <button type="button" onclick="safeRun(() => api('/vehicles/me'))">GET /vehicles/me empresa/motorista</button>
       <button type="button" onclick="safeRun(() => api('/vehicles'))">GET /vehicles disponiveis</button>
+      <button type="button" onclick="document.getElementById('vehicleDialog').showModal()">Cadastrar veiculo</button>
+    </div>
+  </section>
+
+  <section>
+    <h2>Cargas</h2>
+    <div class="row">
+      <button type="button" onclick="safeRun(() => api('/loads/types', { auth: false }))">GET /loads/types</button>
+      <button type="button" onclick="safeRun(() => api('/loads/fill-types', { auth: false }))">GET /loads/fill-types</button>
+      <button type="button" onclick="safeRun(() => api('/loads'))">GET /loads</button>
+      <button type="button" onclick="safeRun(() => api('/loads/me'))">GET /loads/me</button>
+      <button type="button" onclick="document.getElementById('loadDialog').showModal()">Publicar carga</button>
+    </div>
+  </section>
+
+  <section>
+    <h2>Propostas e negociacao</h2>
+    <div class="row">
+      <button type="button" onclick="safeRun(() => api('/proposals/me'))">GET /proposals/me</button>
+      <button type="button" onclick="safeRun(() => api('/proposals/received'))">GET /proposals/received</button>
+      <button type="button" onclick="document.getElementById('proposalDialog').showModal()">Enviar proposta</button>
+      <button type="button" onclick="document.getElementById('counterOfferDialog').showModal()">Contraproposta</button>
+      <button type="button" onclick="document.getElementById('proposalActionsDialog').showModal()">Acoes</button>
+    </div>
+  </section>
+
+  <section>
+    <h2>Request manual</h2>
+    <button type="button" onclick="document.getElementById('manualRequestDialog').showModal()">Abrir request manual</button>
+  </section>
+  </div>
+
+  <aside class="output-panel">
+    <div class="row" style="justify-content: space-between;">
+      <h2>Resultado</h2>
+      <button type="button" onclick="write({ message: 'Resultado limpo' })">Limpar output</button>
+    </div>
+    <pre id="result"></pre>
+  </aside>
+  </div>
+
+  <dialog id="vehicleDialog">
+    <div class="dialog-head">
+      <h2>Cadastrar veiculo</h2>
+      <button type="button" onclick="document.getElementById('vehicleDialog').close()">Fechar</button>
     </div>
     <form onsubmit="createVehicle(event)">
       <h3>POST /vehicles empresa transportadora</h3>
@@ -243,15 +290,12 @@ def frontend_test():
       </div>
       <button>Cadastrar veiculo</button>
     </form>
-  </section>
+  </dialog>
 
-  <section>
-    <h2>Cargas</h2>
-    <div class="row">
-      <button type="button" onclick="safeRun(() => api('/loads/types', { auth: false }))">GET /loads/types</button>
-      <button type="button" onclick="safeRun(() => api('/loads/fill-types', { auth: false }))">GET /loads/fill-types</button>
-      <button type="button" onclick="safeRun(() => api('/loads'))">GET /loads</button>
-      <button type="button" onclick="safeRun(() => api('/loads/me'))">GET /loads/me</button>
+  <dialog id="loadDialog">
+    <div class="dialog-head">
+      <h2>Publicar carga</h2>
+      <button type="button" onclick="document.getElementById('loadDialog').close()">Fechar</button>
     </div>
     <form onsubmit="createLoad(event)">
       <h3>POST /loads</h3>
@@ -283,51 +327,62 @@ def frontend_test():
       <label>Imagens <input name="images" type="file" multiple></label>
       <button>Publicar carga</button>
     </form>
-  </section>
+  </dialog>
 
-  <section>
-    <h2>Propostas e negociacao</h2>
-    <div class="grid">
-      <form onsubmit="sendProposal(event)">
-        <h3>POST /proposals/loads/{load_id}</h3>
-        <label>Load ID <input name="load_id" type="number"></label>
-        <label>Valor proposto <input name="proposed_value" type="number" step="0.01" value="28000"></label>
-        <label>Motorista ID <input name="driver_id" type="number"></label>
-        <label>Veiculo ID <input name="vehicle_id" type="number"></label>
-        <label>Mensagem <textarea name="message">Proposta inicial</textarea></label>
-        <button>Enviar proposta</button>
-      </form>
-
-      <form onsubmit="counterOffer(event)">
-        <h3>POST /proposals/{proposal_id}/negotiations</h3>
-        <label>Proposal ID <input name="proposal_id" type="number"></label>
-        <label>Valor <input name="amount" type="number" step="0.01" value="26000"></label>
-        <label>Mensagem <textarea name="message">Contraproposta</textarea></label>
-        <button>Criar contraproposta</button>
-      </form>
-
-      <form onsubmit="proposalAction(event)">
-        <h3>Acoes</h3>
-        <label>Proposal ID <input name="proposal_id" type="number"></label>
-        <label>Negotiation ID <input name="negotiation_id" type="number"></label>
-        <div class="row">
-          <button name="action" value="proposal-detail">Ver proposta</button>
-          <button name="action" value="proposal-accept">Aceitar proposta</button>
-          <button name="action" value="proposal-reject">Recusar proposta</button>
-          <button name="action" value="negotiations">Ver negociacoes</button>
-          <button name="action" value="negotiation-accept">Aceitar contraproposta</button>
-          <button name="action" value="negotiation-reject">Recusar contraproposta</button>
-        </div>
-      </form>
+  <dialog id="proposalDialog">
+    <div class="dialog-head">
+      <h2>Enviar proposta</h2>
+      <button type="button" onclick="document.getElementById('proposalDialog').close()">Fechar</button>
     </div>
-    <div class="row">
-      <button type="button" onclick="safeRun(() => api('/proposals/me'))">GET /proposals/me</button>
-      <button type="button" onclick="safeRun(() => api('/proposals/received'))">GET /proposals/received</button>
-    </div>
-  </section>
+    <form onsubmit="sendProposal(event)">
+      <h3>POST /proposals/loads/{load_id}</h3>
+      <label>Load ID <input name="load_id" type="number"></label>
+      <label>Valor proposto <input name="proposed_value" type="number" step="0.01" value="28000"></label>
+      <label>Motorista ID <input name="driver_id" type="number"></label>
+      <label>Veiculo ID <input name="vehicle_id" type="number"></label>
+      <label>Mensagem <textarea name="message">Proposta inicial</textarea></label>
+      <button>Enviar proposta</button>
+    </form>
+  </dialog>
 
-  <section>
-    <h2>Request manual</h2>
+  <dialog id="counterOfferDialog">
+    <div class="dialog-head">
+      <h2>Contraproposta</h2>
+      <button type="button" onclick="document.getElementById('counterOfferDialog').close()">Fechar</button>
+    </div>
+    <form onsubmit="counterOffer(event)">
+      <h3>POST /proposals/{proposal_id}/negotiations</h3>
+      <label>Proposal ID <input name="proposal_id" type="number"></label>
+      <label>Valor <input name="amount" type="number" step="0.01" value="26000"></label>
+      <label>Mensagem <textarea name="message">Contraproposta</textarea></label>
+      <button>Criar contraproposta</button>
+    </form>
+  </dialog>
+
+  <dialog id="proposalActionsDialog">
+    <div class="dialog-head">
+      <h2>Acoes de proposta</h2>
+      <button type="button" onclick="document.getElementById('proposalActionsDialog').close()">Fechar</button>
+    </div>
+    <form onsubmit="proposalAction(event)">
+      <label>Proposal ID <input name="proposal_id" type="number"></label>
+      <label>Negotiation ID <input name="negotiation_id" type="number"></label>
+      <div class="row">
+        <button name="action" value="proposal-detail">Ver proposta</button>
+        <button name="action" value="proposal-accept">Aceitar proposta</button>
+        <button name="action" value="proposal-reject">Recusar proposta</button>
+        <button name="action" value="negotiations">Ver negociacoes</button>
+        <button name="action" value="negotiation-accept">Aceitar contraproposta</button>
+        <button name="action" value="negotiation-reject">Recusar contraproposta</button>
+      </div>
+    </form>
+  </dialog>
+
+  <dialog id="manualRequestDialog">
+    <div class="dialog-head">
+      <h2>Request manual</h2>
+      <button type="button" onclick="document.getElementById('manualRequestDialog').close()">Fechar</button>
+    </div>
     <form onsubmit="manualRequest(event)">
       <div class="grid">
         <label>Metodo
@@ -343,17 +398,7 @@ def frontend_test():
       <label>JSON body <textarea name="body">{}</textarea></label>
       <button>Enviar</button>
     </form>
-  </section>
-  </div>
-
-  <aside class="output-panel">
-    <div class="row" style="justify-content: space-between;">
-      <h2>Resultado</h2>
-      <button type="button" onclick="write({ message: 'Resultado limpo' })">Limpar output</button>
-    </div>
-    <pre id="result"></pre>
-  </aside>
-  </div>
+  </dialog>
 </main>
 
 <script>
