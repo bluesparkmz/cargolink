@@ -4,8 +4,10 @@ Controller de mensagens — chat por carga.
 
 from fastapi import HTTPException, status
 from sqlalchemy import func
-from sqlalchemy.orm import Session, joinedload
+from sqlalchemy.orm import Session
 
+from controllers.notifications_controller import create_notification, emit_notification
+from controllers.realtime_events import emit_to_rooms
 from models.models import Client, Company, Driver, Load, LoadProposal, Message, Trip, User
 from schemas.schemas import MessageCreateRequest
 
@@ -170,8 +172,32 @@ def send_message(db: Session, user: User, load_id: int, data: MessageCreateReque
         attachment=data.attachment,
     )
     db.add(message)
+    notification = create_notification(
+        db,
+        user_id=receiver.id,
+        title="Nova mensagem",
+        body=f"{user.name} enviou uma mensagem sobre a carga {load.code}.",
+        notification_type="message.created",
+        payload={"load_id": load.id, "message_id": None, "sender_id": user.id},
+    )
     db.commit()
     db.refresh(message)
+    notification.payload = {
+        "load_id": load.id,
+        "message_id": message.id,
+        "sender_id": user.id,
+    }
+    db.commit()
+    db.refresh(notification)
+    emit_to_rooms(
+        {f"user:{receiver.id}", f"user:{user.id}", f"load:{load.id}"},
+        {
+            "type": "message.created",
+            "load_id": load.id,
+            "message": message,
+        },
+    )
+    emit_notification(notification)
     return message
 
 

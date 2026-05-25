@@ -19,6 +19,8 @@ from constants import (
     PROPOSAL_STATUS_NEGOTIATING,
     PROPOSAL_STATUS_REJECTED,
 )
+from controllers.notifications_controller import create_notification, emit_notification
+from controllers.realtime_events import emit_to_rooms
 from controllers.loads_controller import accept_proposal, create_proposal, reject_proposal
 from models.models import Client, Company, Driver, Load, LoadProposal, ProposalNegotiation, Trip, User
 from schemas.schemas import LoadProposalCreateRequest, ProposalNegotiationCreateRequest
@@ -144,6 +146,33 @@ def _reject_pending_negotiations(proposal: LoadProposal) -> None:
     for negotiation in proposal.negotiations:
         if negotiation.status == NEGOTIATION_STATUS_PENDING:
             negotiation.status = NEGOTIATION_STATUS_REJECTED
+
+
+def _proposal_user_ids(db: Session, proposal: LoadProposal) -> set[int]:
+    user_ids: set[int] = set()
+    load = proposal.load or db.query(Load).filter(Load.id == proposal.load_id).first()
+    if load:
+        client = db.query(Client).filter(Client.id == load.client_id).first()
+        if client:
+            user_ids.add(client.user_id)
+    if proposal.company_id:
+        company = db.query(Company).filter(Company.id == proposal.company_id).first()
+        if company:
+            user_ids.add(company.user_id)
+    if proposal.driver_id:
+        driver = db.query(Driver).filter(Driver.id == proposal.driver_id).first()
+        if driver:
+            user_ids.add(driver.user_id)
+    return user_ids
+
+
+def _proposal_rooms(proposal: LoadProposal) -> set[str]:
+    rooms = {f"load:{proposal.load_id}", f"proposal:{proposal.id}"}
+    if proposal.company_id:
+        rooms.add(f"company:{proposal.company_id}")
+    if proposal.driver_id:
+        rooms.add(f"driver:{proposal.driver_id}")
+    return rooms
 
 
 def _close_proposal_as_accepted(db: Session, proposal: LoadProposal) -> None:
@@ -311,8 +340,34 @@ def create_counter_offer(
     )
     proposal.status = PROPOSAL_STATUS_NEGOTIATING
     db.add(negotiation)
+    target_user_ids = _proposal_user_ids(db, proposal) - {user.id}
+    notifications = [
+        create_notification(
+            db,
+            user_id=user_id,
+            title="Nova contraproposta",
+            body="Recebeu uma nova contraproposta.",
+            notification_type="negotiation.created",
+            payload={"proposal_id": proposal.id, "load_id": proposal.load_id},
+        )
+        for user_id in target_user_ids
+    ]
     db.commit()
     db.refresh(negotiation)
+    for notification in notifications:
+        db.refresh(notification)
+        emit_notification(notification)
+    emit_to_rooms(
+        _proposal_rooms(proposal),
+        {
+            "type": "negotiation.created",
+            "proposal_id": proposal.id,
+            "negotiation_id": negotiation.id,
+            "load_id": proposal.load_id,
+            "sender_id": user.id,
+            "status": proposal.status,
+        },
+    )
 
     return negotiation
 
@@ -350,6 +405,38 @@ def accept_counter_offer(
     proposal.proposed_value = negotiation.amount
     _close_proposal_as_accepted(db, proposal)
     db.commit()
+    trip = db.query(Trip).filter(Trip.load_id == proposal.load_id).first()
+    notifications = [
+        create_notification(
+            db,
+            user_id=user_id,
+            title="Contraproposta aceite",
+            body="A contraproposta foi aceite e a viagem foi criada.",
+            notification_type="negotiation.accepted",
+            payload={
+                "proposal_id": proposal.id,
+                "negotiation_id": negotiation.id,
+                "load_id": proposal.load_id,
+                "trip_id": trip.id if trip else None,
+            },
+        )
+        for user_id in (_proposal_user_ids(db, proposal) - {user.id})
+    ]
+    db.commit()
+    for notification in notifications:
+        db.refresh(notification)
+        emit_notification(notification)
+    emit_to_rooms(
+        _proposal_rooms(proposal) | ({f"trip:{trip.id}"} if trip else set()),
+        {
+            "type": "negotiation.accepted",
+            "proposal_id": proposal.id,
+            "negotiation_id": negotiation.id,
+            "load_id": proposal.load_id,
+            "trip_id": trip.id if trip else None,
+            "status": proposal.status,
+        },
+    )
     return _query_proposal(db, proposal_id)
 
 
@@ -384,5 +471,33 @@ def reject_counter_offer(
 
     negotiation.status = NEGOTIATION_STATUS_REJECTED
     _close_proposal_as_rejected(proposal)
+    notifications = [
+        create_notification(
+            db,
+            user_id=user_id,
+            title="Contraproposta recusada",
+            body="A contraproposta foi recusada.",
+            notification_type="negotiation.rejected",
+            payload={
+                "proposal_id": proposal.id,
+                "negotiation_id": negotiation.id,
+                "load_id": proposal.load_id,
+            },
+        )
+        for user_id in (_proposal_user_ids(db, proposal) - {user.id})
+    ]
     db.commit()
+    for notification in notifications:
+        db.refresh(notification)
+        emit_notification(notification)
+    emit_to_rooms(
+        _proposal_rooms(proposal),
+        {
+            "type": "negotiation.rejected",
+            "proposal_id": proposal.id,
+            "negotiation_id": negotiation.id,
+            "load_id": proposal.load_id,
+            "status": proposal.status,
+        },
+    )
     return _query_proposal(db, proposal_id)

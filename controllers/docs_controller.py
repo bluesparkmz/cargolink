@@ -20,6 +20,8 @@ ALLOWED_DOCS = {
     "clients": "clients.md",
     "driver": "driver.md",
     "proposals": "proposals.md",
+    "trips": "trips.md",
+    "websocket": "websocket.md",
 }
 
 DOC_NAV_ITEMS = (
@@ -28,6 +30,8 @@ DOC_NAV_ITEMS = (
     ("documentation/clients", "Cliente"),
     ("documentation/driver", "Motorista"),
     ("documentation/proposals", "Propostas"),
+    ("documentation/trips", "Viagens"),
+    ("documentation/websocket", "WebSocket"),
 )
 
 PYGMENTS_FORMATTER = HtmlFormatter(nowrap=True)
@@ -397,6 +401,8 @@ def render_documentation_index() -> str:
             ("clients", "Cliente", "Cargas, propostas recebidas, tracking e entrega."),
             ("driver", "Motorista", "Viagens atribuidas, GPS, paragens e chegada."),
             ("proposals", "Propostas", "Envio, contrapropostas, aceite e recusa."),
+            ("trips", "Viagens", "Estados, GPS, tracking e confirmacao de entrega."),
+            ("websocket", "WebSocket", "Realtime para GPS, mensagens e notificacoes."),
         )
     )
     proposals_notice = """

@@ -8,6 +8,7 @@ Eventos recebidos:
 - subscribe_trip: {"type":"subscribe_trip","trip_id":1}
 - unsubscribe_trip: {"type":"unsubscribe_trip","trip_id":1}
 - driver_location: {"type":"driver_location","trip_id":1,"latitude":-25.9,"longitude":32.5}
+- message_send: {"type":"message_send","load_id":1,"receiver_id":2,"body":"Ola"}
 """
 
 from typing import Any
@@ -19,9 +20,10 @@ from sqlalchemy.orm import Session
 from constants import TRIP_GROUP_STATUSES, TRIP_GROUP_IN_PROGRESS
 from controllers.connection_manager import connection_manager
 from controllers.driver_trips_controller import add_driver_location
+from controllers.messages_controller import send_message
 from database import SessionLocal
 from models.models import Client, Company, Driver, Load, LoadProposal, Trip, User
-from schemas.schemas import TripLocationCreateRequest
+from schemas.schemas import MessageCreateRequest, TripLocationCreateRequest
 from security import decode_token
 
 router = APIRouter()
@@ -270,6 +272,39 @@ async def _handle_driver_location(websocket: WebSocket, db: Session, user: User,
     await connection_manager.broadcast_rooms(_event_rooms_for_trip(trip), event)
 
 
+async def _handle_message_send(websocket: WebSocket, db: Session, user: User, data: dict[str, Any]) -> None:
+    load_id = data.get("load_id")
+    if not isinstance(load_id, int):
+        await _send_error(websocket, "load_id invalido")
+        return
+
+    try:
+        payload = MessageCreateRequest(
+            receiver_id=data.get("receiver_id"),
+            body=data.get("body"),
+            attachment=data.get("attachment"),
+        )
+    except ValidationError as exc:
+        await _send_error(websocket, str(exc), "validation_error")
+        return
+
+    try:
+        message = send_message(db, user, load_id, payload)
+    except HTTPException as exc:
+        db.rollback()
+        await _send_error(websocket, str(exc.detail), "request_error")
+        return
+
+    await connection_manager.send_personal(
+        websocket,
+        {
+            "type": "message.sent",
+            "load_id": load_id,
+            "message_id": message.id,
+        },
+    )
+
+
 @router.websocket("/ws")
 async def websocket_endpoint(websocket: WebSocket):
     token = websocket.query_params.get("token")
@@ -306,6 +341,8 @@ async def websocket_endpoint(websocket: WebSocket):
                 await _handle_subscribe_load(websocket, db, user, data)
             elif event_type == "driver_location":
                 await _handle_driver_location(websocket, db, user, data)
+            elif event_type == "message_send":
+                await _handle_message_send(websocket, db, user, data)
             else:
                 await _send_error(websocket, "Tipo de evento desconhecido", "unknown_event")
     except WebSocketDisconnect:

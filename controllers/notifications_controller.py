@@ -6,7 +6,41 @@ from fastapi import HTTPException, status
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
+from controllers.realtime_events import emit_to_user
 from models.models import Notification, User
+
+
+def create_notification(
+    db: Session,
+    *,
+    user_id: int,
+    title: str,
+    body: str,
+    notification_type: str | None = None,
+    payload: dict | None = None,
+) -> Notification:
+    """Cria notificacao pendente na sessao atual."""
+    notification = Notification(
+        user_id=user_id,
+        title=title,
+        body=body,
+        notification_type=notification_type,
+        payload=payload,
+    )
+    db.add(notification)
+    db.flush()
+    return notification
+
+
+def emit_notification(notification: Notification) -> None:
+    """Envia notificacao criada para o utilizador conectado via WebSocket."""
+    emit_to_user(
+        notification.user_id,
+        {
+            "type": "notification.created",
+            "notification": notification,
+        },
+    )
 
 
 def list_notifications(

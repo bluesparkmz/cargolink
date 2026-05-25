@@ -334,6 +334,117 @@ Se o ponto realtime nao virou novo ponto historico, esses campos podem apontar
 para o ultimo ponto salvo. A app deve usar `latitude` e `longitude` para animar
 o mapa ao vivo, e buscar o historico HTTP para desenhar a rota consolidada.
 
+## Enviar mensagem pelo WebSocket
+
+```json
+{
+  "type": "message_send",
+  "load_id": 4,
+  "receiver_id": 10,
+  "body": "Estou a caminho.",
+  "attachment": null
+}
+```
+
+O backend valida se o utilizador pode participar na conversa da carga.
+
+Resposta para quem enviou:
+
+```json
+{
+  "type": "message.sent",
+  "load_id": 4,
+  "message_id": 31
+}
+```
+
+## Evento recebido: message.created
+
+Emitido quando uma mensagem e criada via HTTP ou WebSocket:
+
+```json
+{
+  "type": "message.created",
+  "load_id": 4,
+  "message": {
+    "id": 31,
+    "load_id": 4,
+    "sender_id": 8,
+    "receiver_id": 10,
+    "body": "Estou a caminho.",
+    "attachment": null,
+    "read": false,
+    "created_at": "2026-05-26T12:00:00"
+  }
+}
+```
+
+Quem recebe:
+
+```text
+user:{sender_id}
+user:{receiver_id}
+load:{load_id}
+```
+
+## Evento recebido: notification.created
+
+Emitido quando o backend cria uma notificacao automatica:
+
+```json
+{
+  "type": "notification.created",
+  "notification": {
+    "id": 20,
+    "title": "Nova proposta recebida",
+    "body": "A empresa enviou uma proposta para a sua carga.",
+    "notification_type": "proposal.created",
+    "read": false,
+    "payload": {
+      "load_id": 4,
+      "proposal_id": 15
+    },
+    "created_at": "2026-05-26T12:00:00"
+  }
+}
+```
+
+Tipos emitidos automaticamente:
+
+```text
+proposal.created
+proposal.accepted
+proposal.rejected
+negotiation.created
+negotiation.accepted
+negotiation.rejected
+trip.started
+trip.arrived
+trip.completed
+message.created
+```
+
+## Evento recebido: trip.status_changed
+
+Emitido quando a viagem muda de estado:
+
+```json
+{
+  "type": "trip.status_changed",
+  "trip_id": 12,
+  "load_id": 4,
+  "status": "viagem_iniciada"
+}
+```
+
+Estados emitidos:
+
+```text
+viagem_iniciada
+aguardando_cliente
+concluida
+```
+
 ## Erros
 
 Formato padrao:

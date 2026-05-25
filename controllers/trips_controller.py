@@ -18,6 +18,8 @@ from constants import (
     TRIP_STATUS_WAITING,
     TRIP_STATUS_WAITING_CLIENT,
 )
+from controllers.notifications_controller import create_notification, emit_notification
+from controllers.realtime_events import emit_to_rooms
 from models.models import Client, Company, Driver, Load, Trip, TripLocation, User, Vehicle
 from schemas.schemas import TripLocationCreateRequest, TripStartRequest
 
@@ -126,6 +128,67 @@ def _should_store_trip_location(
     return distance >= TRIP_LOCATION_MIN_DISTANCE_METERS
 
 
+def _trip_event_rooms(trip: Trip) -> set[str]:
+    rooms = {f"trip:{trip.id}", f"load:{trip.load_id}"}
+    if trip.company_id:
+        rooms.add(f"company:{trip.company_id}")
+    if trip.driver_id:
+        rooms.add(f"driver:{trip.driver_id}")
+    return rooms
+
+
+def _trip_user_ids(db: Session, trip: Trip) -> set[int]:
+    user_ids: set[int] = set()
+    load = db.query(Load).filter(Load.id == trip.load_id).first()
+    if load:
+        client = db.query(Client).filter(Client.id == load.client_id).first()
+        if client:
+            user_ids.add(client.user_id)
+    if trip.company_id:
+        company = db.query(Company).filter(Company.id == trip.company_id).first()
+        if company:
+            user_ids.add(company.user_id)
+    if trip.driver_id:
+        driver = db.query(Driver).filter(Driver.id == trip.driver_id).first()
+        if driver:
+            user_ids.add(driver.user_id)
+    return user_ids
+
+
+def _emit_trip_status_changed(
+    db: Session,
+    trip: Trip,
+    *,
+    title: str,
+    body: str,
+    notification_type: str,
+) -> None:
+    notifications = [
+        create_notification(
+            db,
+            user_id=user_id,
+            title=title,
+            body=body,
+            notification_type=notification_type,
+            payload={"trip_id": trip.id, "load_id": trip.load_id, "status": trip.status},
+        )
+        for user_id in _trip_user_ids(db, trip)
+    ]
+    db.commit()
+    for notification in notifications:
+        db.refresh(notification)
+        emit_notification(notification)
+    emit_to_rooms(
+        _trip_event_rooms(trip),
+        {
+            "type": "trip.status_changed",
+            "trip_id": trip.id,
+            "load_id": trip.load_id,
+            "status": trip.status,
+        },
+    )
+
+
 def list_my_trips(db: Session, user: User) -> list[Trip]:
     """Lista viagens do motorista ou do cliente."""
     if user.user_type == "motorista":
@@ -211,6 +274,13 @@ def start_trip(db: Session, user: User, trip_id: int, data: TripStartRequest) ->
 
     db.commit()
     db.refresh(trip)
+    _emit_trip_status_changed(
+        db,
+        trip,
+        title="Viagem iniciada",
+        body="O motorista iniciou a viagem.",
+        notification_type="trip.started",
+    )
     return trip
 
 
@@ -237,6 +307,13 @@ def arrive_trip(db: Session, user: User, trip_id: int) -> Trip:
     trip.arrived_at = datetime.now(timezone.utc)
     db.commit()
     db.refresh(trip)
+    _emit_trip_status_changed(
+        db,
+        trip,
+        title="Motorista chegou ao destino",
+        body="A carga chegou ao destino. Aguarda confirmacao do cliente.",
+        notification_type="trip.arrived",
+    )
     return trip
 
 
@@ -277,6 +354,13 @@ def confirm_delivery(db: Session, user: User, trip_id: int) -> Trip:
 
     db.commit()
     db.refresh(trip)
+    _emit_trip_status_changed(
+        db,
+        trip,
+        title="Entrega confirmada",
+        body="A entrega foi confirmada pelo cliente.",
+        notification_type="trip.completed",
+    )
     return trip
 
 

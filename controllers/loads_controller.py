@@ -32,6 +32,8 @@ from constants import (
     WEIGHT_UNITS,
 )
 from controllers.trips_controller import _user_can_access_trip
+from controllers.notifications_controller import create_notification, emit_notification
+from controllers.realtime_events import emit_to_rooms
 from models.models import (
     Client,
     Company,
@@ -648,8 +650,38 @@ def create_proposal(
         message=data.message,
     )
     db.add(proposal)
+    client = db.query(Client).filter(Client.id == load.client_id).first()
+    notification = None
+    if client:
+        notification = create_notification(
+            db,
+            user_id=client.user_id,
+            title="Nova proposta recebida",
+            body=f"{company.company_name} enviou uma proposta para a carga {load.code}.",
+            notification_type="proposal.created",
+            payload={"load_id": load.id, "proposal_id": None, "company_id": company.id},
+        )
     db.commit()
     db.refresh(proposal)
+    if notification:
+        notification.payload = {
+            "load_id": load.id,
+            "proposal_id": proposal.id,
+            "company_id": company.id,
+        }
+        db.commit()
+        db.refresh(notification)
+        emit_notification(notification)
+    emit_to_rooms(
+        {f"load:{load.id}", f"client:{load.client_id}", f"company:{company.id}"},
+        {
+            "type": "proposal.created",
+            "load_id": load.id,
+            "proposal_id": proposal.id,
+            "company_id": company.id,
+            "status": proposal.status,
+        },
+    )
     return proposal
 
 
@@ -741,6 +773,46 @@ def accept_proposal(db: Session, user: User, load_id: int, proposal_id: int) -> 
     db.add(trip)
     db.commit()
     db.refresh(trip)
+    targets: set[int] = set()
+    if proposal.company_id:
+        company = db.query(Company).filter(Company.id == proposal.company_id).first()
+        if company:
+            targets.add(company.user_id)
+    if proposal.driver_id:
+        driver = db.query(Driver).filter(Driver.id == proposal.driver_id).first()
+        if driver:
+            targets.add(driver.user_id)
+    notifications = [
+        create_notification(
+            db,
+            user_id=user_id,
+            title="Proposta aceite",
+            body=f"A proposta para a carga {load.code} foi aceite. A viagem foi criada.",
+            notification_type="proposal.accepted",
+            payload={"load_id": load.id, "proposal_id": proposal.id, "trip_id": trip.id},
+        )
+        for user_id in targets
+    ]
+    db.commit()
+    for notification in notifications:
+        db.refresh(notification)
+        emit_notification(notification)
+    emit_to_rooms(
+        {
+            f"load:{load.id}",
+            f"trip:{trip.id}",
+            f"company:{proposal.company_id}" if proposal.company_id else "",
+            f"driver:{proposal.driver_id}" if proposal.driver_id else "",
+        }
+        - {""},
+        {
+            "type": "proposal.accepted",
+            "load_id": load.id,
+            "proposal_id": proposal.id,
+            "trip_id": trip.id,
+            "status": proposal.status,
+        },
+    )
     return trip
 
 
@@ -775,4 +847,38 @@ def reject_proposal(db: Session, user: User, load_id: int, proposal_id: int) -> 
     )
     db.commit()
     db.refresh(proposal)
+    targets: set[int] = set()
+    if proposal.company_id:
+        company = db.query(Company).filter(Company.id == proposal.company_id).first()
+        if company:
+            targets.add(company.user_id)
+    if proposal.driver_id:
+        driver = db.query(Driver).filter(Driver.id == proposal.driver_id).first()
+        if driver:
+            targets.add(driver.user_id)
+    notifications = [
+        create_notification(
+            db,
+            user_id=user_id,
+            title="Proposta recusada",
+            body=f"A proposta para a carga {load.code} foi recusada.",
+            notification_type="proposal.rejected",
+            payload={"load_id": load.id, "proposal_id": proposal.id},
+        )
+        for user_id in targets
+    ]
+    db.commit()
+    for notification in notifications:
+        db.refresh(notification)
+        emit_notification(notification)
+    emit_to_rooms(
+        {f"load:{load.id}", f"company:{proposal.company_id}" if proposal.company_id else ""}
+        - {""},
+        {
+            "type": "proposal.rejected",
+            "load_id": load.id,
+            "proposal_id": proposal.id,
+            "status": proposal.status,
+        },
+    )
     return proposal
