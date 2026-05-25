@@ -26,8 +26,8 @@ from controllers.loads_controller import (
 )
 from deps import get_current_user
 from database import get_db
-from models import User
-from schemas import (
+from models.models import User
+from schemas.schemas import (
     LoadCreateRequest,
     LoadCreateRequestForm,
     LoadDetailResponse,

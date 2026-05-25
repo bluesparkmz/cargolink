@@ -10,8 +10,8 @@ from sqlalchemy.orm import Session
 from constants import VEHICLE_STATUS_AVAILABLE
 from controllers.drivers_controller import get_my_driver
 from controllers.vehicles_controller import _get_own_vehicle, get_vehicle_by_id
-from models import Driver, User, Vehicle
-from schemas import LocationUpdateRequest
+from models.models import Driver, User, Vehicle
+from schemas.schemas import LocationUpdateRequest
 
 
 def _now() -> datetime:

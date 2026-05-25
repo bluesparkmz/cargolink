@@ -18,8 +18,8 @@ from controllers.companies_controller import (
 )
 from database import get_db
 from deps import get_current_user
-from models import Company, Driver, LoadProposal, User
-from schemas import (
+from models.models import Company, Driver, LoadProposal, User
+from schemas.schemas import (
     CompanyDetailResponse,
     CompanyDriverAttachRequest,
     CompanyListItem,

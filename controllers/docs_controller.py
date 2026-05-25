@@ -7,6 +7,10 @@ from html import escape
 from pathlib import Path
 
 from fastapi import HTTPException, status
+from pygments import highlight
+from pygments.formatters import HtmlFormatter
+from pygments.lexers import get_lexer_by_name
+from pygments.util import ClassNotFound
 
 
 DOCS_DIR = Path(__file__).resolve().parents[1] / "docs"
@@ -23,6 +27,8 @@ DOC_NAV_ITEMS = (
     ("documentation/clients", "Cliente"),
     ("documentation/driver", "Motorista"),
 )
+
+PYGMENTS_FORMATTER = HtmlFormatter(nowrap=True)
 
 
 def list_documentation() -> list[dict[str, str]]:
@@ -74,44 +80,57 @@ def markdown_to_safe_html(markdown: str) -> str:
         return safe
 
     def detect_code_language(code: str, language: str) -> str:
-        if language:
-            return language.lower()
+        explicit_language = language.lower()
         stripped = code.lstrip()
+        has_http_route = any(
+            re.match(r"^(GET|POST|PATCH|DELETE|PUT)\s+/", line.strip())
+            for line in code.splitlines()
+        )
+        if explicit_language == "http" or (explicit_language in {"", "text"} and has_http_route):
+            return "http"
+        if explicit_language:
+            return explicit_language
         if stripped.startswith("{") or stripped.startswith("["):
             return "json"
-        if re.match(r"^(GET|POST|PATCH|DELETE|PUT)\s+/", stripped):
-            return "http"
         return "text"
 
     def highlight_code(code: str, language: str) -> str:
         lang = detect_code_language(code, language)
-        safe = escape(code, quote=False)
 
         if lang == "json":
-            safe = re.sub(
-                r'("(?:\\.|[^"\\])*")(?=\s*:)',
-                r'<span class="tok-key">\1</span>',
-                safe,
-            )
-            safe = re.sub(
-                r'(:\s*)("(?:\\.|[^"\\])*")',
-                r'\1<span class="tok-string">\2</span>',
-                safe,
-            )
-            safe = re.sub(r"\b(true|false|null)\b", r'<span class="tok-bool">\1</span>', safe)
-            safe = re.sub(r"\b(-?\d+(?:\.\d+)?)\b", r'<span class="tok-number">\1</span>', safe)
-            return safe
+            try:
+                return highlight(code, get_lexer_by_name("json"), PYGMENTS_FORMATTER).rstrip("\n")
+            except ClassNotFound:
+                pass
+
+        safe = escape(code, quote=False)
 
         if lang == "http":
+            safe = re.sub(r"(/[\w/{}/?.=&:-]*)", r'<span class="tok-path">\1</span>', safe)
             safe = re.sub(
                 r"\b(GET|POST|PATCH|DELETE|PUT)\b",
                 r'<span class="tok-method">\1</span>',
                 safe,
             )
-            safe = re.sub(r"(/[\w/{}/?.=&:-]*)", r'<span class="tok-path">\1</span>', safe)
             return safe
 
-        return safe
+        if lang == "text":
+            safe = re.sub(
+                r"(?m)^([A-Za-zÀ-ÿ][\wÀ-ÿ ]*:)",
+                r'<span class="tok-section">\1</span>',
+                safe,
+            )
+            safe = re.sub(
+                r"(?m)^(\s*)(-)(\s+)(.+)$",
+                r'\1<span class="tok-dash">\2</span>\3<span class="tok-bullet">\4</span>',
+                safe,
+            )
+            return safe
+
+        try:
+            return highlight(code, get_lexer_by_name(lang), PYGMENTS_FORMATTER).rstrip("\n")
+        except ClassNotFound:
+            return safe
 
     def flush_paragraph() -> None:
         nonlocal paragraph
@@ -306,6 +325,36 @@ def render_document_page(title: str, markdown: str) -> str:
     }}
     .tok-path {{
       color: #93c5fd;
+    }}
+    .tok-section {{
+      color: #fbbf24;
+      font-weight: 700;
+    }}
+    .tok-dash {{
+      color: #7dd3fc;
+      font-weight: 700;
+    }}
+    .tok-bullet {{
+      color: #e0f2fe;
+    }}
+    .k, .kc, .kd, .kn, .kp, .kr, .kt {{
+      color: #f0abfc;
+    }}
+    .s, .s1, .s2, .sa, .sb, .sc, .sd, .se, .sh, .si, .sx, .sr, .ss {{
+      color: #bef264;
+    }}
+    .m, .mi, .mf, .mh, .mo, .il {{
+      color: #fbbf24;
+    }}
+    .nt, .na, .nb, .nc, .nf, .nl, .nn, .nv {{
+      color: #7dd3fc;
+    }}
+    .c, .c1, .cm, .cp, .cs {{
+      color: #94a3b8;
+      font-style: italic;
+    }}
+    .p, .o, .ow {{
+      color: #cbd5e1;
     }}
   </style>
 </head>
@@ -507,6 +556,36 @@ def render_documentation_index() -> str:
     }}
     .tok-path {{
       color: #93c5fd;
+    }}
+    .tok-section {{
+      color: #fbbf24;
+      font-weight: 700;
+    }}
+    .tok-dash {{
+      color: #7dd3fc;
+      font-weight: 700;
+    }}
+    .tok-bullet {{
+      color: #e0f2fe;
+    }}
+    .k, .kc, .kd, .kn, .kp, .kr, .kt {{
+      color: #f0abfc;
+    }}
+    .s, .s1, .s2, .sa, .sb, .sc, .sd, .se, .sh, .si, .sx, .sr, .ss {{
+      color: #bef264;
+    }}
+    .m, .mi, .mf, .mh, .mo, .il {{
+      color: #fbbf24;
+    }}
+    .nt, .na, .nb, .nc, .nf, .nl, .nn, .nv {{
+      color: #7dd3fc;
+    }}
+    .c, .c1, .cm, .cp, .cs {{
+      color: #94a3b8;
+      font-style: italic;
+    }}
+    .p, .o, .ow {{
+      color: #cbd5e1;
     }}
     @media (max-width: 760px) {{
       main {{

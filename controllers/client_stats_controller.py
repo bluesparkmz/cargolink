@@ -11,7 +11,7 @@ from constants import (
     LOAD_STATUS_COMPLETED,
 )
 from controllers.clients_controller import get_my_client
-from models import Load, Rating, User
+from models.models import Load, Rating, User
 
 
 def get_client_stats(db: Session, user: User) -> dict:

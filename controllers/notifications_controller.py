@@ -6,7 +6,7 @@ from fastapi import HTTPException, status
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
-from models import Notification, User
+from models.models import Notification, User
 
 
 def list_notifications(

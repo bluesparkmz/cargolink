@@ -7,8 +7,8 @@ from fastapi import HTTPException, status
 from sqlalchemy.orm import Session
 
 from security import create_access_token, hash_password, verify_password
-from models import Client, Company, Driver, User, Wallet
-from schemas import PasswordChangeRequest, RegisterRequest
+from models.models import Client, Company, Driver, User, Wallet
+from schemas.schemas import PasswordChangeRequest, RegisterRequest
 
 
 def register_user(db: Session, data: RegisterRequest) -> User:

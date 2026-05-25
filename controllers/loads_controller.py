@@ -24,9 +24,9 @@ from constants import (
     ROUTE_AVG_SPEED_KMH_MIN,
     WEIGHT_UNITS,
 )
-from models import Client, Company, Driver, Load, LoadImage, LoadProposal, Rating, Trip, TripLocation, User, Vehicle
+from models.models import Client, Company, Driver, Load, LoadImage, LoadProposal, Rating, Trip, TripLocation, User, Vehicle
 from controllers.trips_controller import _user_can_access_trip
-from schemas import (
+from schemas.schemas import (
     LoadCreateRequest,
     LoadCreateRequestForm,
     LoadDetailResponse,

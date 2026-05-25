@@ -14,8 +14,8 @@ from sqlalchemy.orm import Session, joinedload
 from config import settings
 from constants import VEHICLE_STATUSES, VEHICLE_STATUS_INACTIVE
 from controllers.drivers_controller import get_my_driver
-from models import Company, Driver, User, Vehicle
-from schemas import VehicleCreateRequest, VehicleUpdateRequest
+from models.models import Company, Driver, User, Vehicle
+from schemas.schemas import VehicleCreateRequest, VehicleUpdateRequest
 
 ALLOWED_VEHICLE_IMAGE_TYPES = {
     "image/jpeg": ".jpg",

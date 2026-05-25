@@ -8,8 +8,8 @@ from sqlalchemy.orm import Session
 from controllers.stats_controller import get_dashboard_stats
 from database import get_db
 from deps import get_current_user
-from models import User
-from schemas import DashboardStatsResponse
+from models.models import User
+from schemas.schemas import DashboardStatsResponse
 
 router = APIRouter()
 

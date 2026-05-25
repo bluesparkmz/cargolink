@@ -30,7 +30,7 @@ from routers.vehicles import router as vehicles_router
 from routers.wallet import router as wallet_router
 
 # Importa modelos para o SQLAlchemy registar todas as tabelas
-import models  # noqa: F401
+import models.models  # noqa: F401
 
 
 @asynccontextmanager

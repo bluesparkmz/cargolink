@@ -12,7 +12,7 @@ from constants import (
     LOAD_STATUS_AVAILABLE,
     LOAD_STATUS_COMPLETED,
 )
-from models import Load, Vehicle
+from models.models import Load, Vehicle
 
 
 def get_dashboard_stats(db: Session) -> dict:

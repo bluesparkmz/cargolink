@@ -16,8 +16,8 @@ from constants import (
     TRIP_GROUP_STATUSES,
     TRIP_STATUS_STARTED,
 )
-from models import Client, Driver, Load, Trip, TripLocation, TripStop, User
-from schemas import TripLocationCreateRequest, TripStartRequest, TripStopCreateRequest
+from models.models import Client, Driver, Load, Trip, TripLocation, TripStop, User
+from schemas.schemas import TripLocationCreateRequest, TripStartRequest, TripStopCreateRequest
 
 
 def require_driver(db: Session, user: User) -> Driver:

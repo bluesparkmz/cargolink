@@ -13,8 +13,8 @@ from controllers.notifications_controller import (
 )
 from database import get_db
 from deps import get_current_user
-from models import User
-from schemas import NotificationResponse, UnreadCountResponse
+from models.models import User
+from schemas.schemas import NotificationResponse, UnreadCountResponse
 
 router = APIRouter()
 

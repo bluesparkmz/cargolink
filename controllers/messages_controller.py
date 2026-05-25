@@ -6,8 +6,8 @@ from fastapi import HTTPException, status
 from sqlalchemy import func
 from sqlalchemy.orm import Session, joinedload
 
-from models import Client, Company, Driver, Load, LoadProposal, Message, Trip, User
-from schemas import MessageCreateRequest
+from models.models import Client, Company, Driver, Load, LoadProposal, Message, Trip, User
+from schemas.schemas import MessageCreateRequest
 
 
 def _user_can_access_load_chat(db: Session, user: User, load: Load) -> None:

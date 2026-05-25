@@ -18,8 +18,8 @@ from controllers.vehicles_controller import (
 )
 from database import get_db
 from deps import get_current_user
-from models import User, Vehicle
-from schemas import (
+from models.models import User, Vehicle
+from schemas.schemas import (
     LocationUpdateRequest,
     VehicleCreateRequest,
     VehicleDetailResponse,

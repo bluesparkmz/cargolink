@@ -8,8 +8,8 @@ from sqlalchemy.orm import Session
 from controllers.users_controller import get_user_by_id, get_user_profile, update_user
 from deps import get_current_user
 from database import get_db
-from models import User
-from schemas import UserProfileResponse, UserResponse, UserUpdateRequest
+from models.models import User
+from schemas.schemas import UserProfileResponse, UserResponse, UserUpdateRequest
 
 router = APIRouter()
 

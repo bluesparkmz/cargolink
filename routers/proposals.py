@@ -19,8 +19,8 @@ from controllers.proposals_controller import (
 )
 from database import get_db
 from deps import get_current_user
-from models import LoadProposal, ProposalNegotiation, User
-from schemas import (
+from models.models import LoadProposal, ProposalNegotiation, User
+from schemas.schemas import (
     LoadProposalCreateRequest,
     LoadProposalDetailResponse,
     ProposalNegotiationCreateRequest,

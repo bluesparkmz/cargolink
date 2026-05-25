@@ -5,8 +5,8 @@ Controller de empresas transportadoras: perfil, motoristas e propostas.
 from fastapi import HTTPException, status
 from sqlalchemy.orm import Session, joinedload
 
-from models import Company, Driver, LoadProposal, Trip, User
-from schemas import CompanyProfileUpdateRequest
+from models.models import Company, Driver, LoadProposal, Trip, User
+from schemas.schemas import CompanyProfileUpdateRequest
 
 
 def require_company(user: User) -> None:

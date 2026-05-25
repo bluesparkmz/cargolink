@@ -5,8 +5,8 @@ Controller de clientes: perfil e listagem.
 from fastapi import HTTPException, status
 from sqlalchemy.orm import Session, joinedload
 
-from models import Client, Company, User
-from schemas import ClientProfileUpdateRequest, ConvertClientToCompanyRequest
+from models.models import Client, Company, User
+from schemas.schemas import ClientProfileUpdateRequest, ConvertClientToCompanyRequest
 
 
 def require_client(user: User) -> None:

@@ -6,8 +6,8 @@ from fastapi import HTTPException, status
 from sqlalchemy.orm import Session
 
 from constants import DOCUMENT_STATUS_PENDING, DOCUMENT_TYPE_IDS
-from models import Document, User
-from schemas import DocumentCreateRequest
+from models.models import Document, User
+from schemas.schemas import DocumentCreateRequest
 
 
 def list_my_documents(db: Session, user: User) -> list[Document]:

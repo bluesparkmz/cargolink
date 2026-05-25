@@ -5,8 +5,8 @@ Controller de utilizadores: perfil e atualização dos dados base.
 from fastapi import HTTPException, status
 from sqlalchemy.orm import Session, joinedload
 
-from models import User
-from schemas import UserUpdateRequest
+from models.models import User
+from schemas.schemas import UserUpdateRequest
 
 
 def get_user_profile(db: Session, user: User) -> User:

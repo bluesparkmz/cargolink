@@ -17,7 +17,7 @@ from constants import (
     TRIP_STATUS_WAITING_CLIENT,
 )
 from controllers.clients_controller import get_my_client
-from models import Load, LoadProposal, Trip, User
+from models.models import Load, LoadProposal, Trip, User
 
 
 def _display_status(load: Load, trip: Trip | None, pending_proposals: int) -> str:

@@ -8,8 +8,8 @@ from fastapi import HTTPException, status
 from sqlalchemy.orm import Session, joinedload
 
 from controllers.loads_controller import accept_proposal, create_proposal, reject_proposal
-from models import Client, Company, Driver, Load, LoadProposal, ProposalNegotiation, Trip, User
-from schemas import LoadProposalCreateRequest, ProposalNegotiationCreateRequest
+from models.models import Client, Company, Driver, Load, LoadProposal, ProposalNegotiation, Trip, User
+from schemas.schemas import LoadProposalCreateRequest, ProposalNegotiationCreateRequest
 
 PROPOSAL_STATUS_PENDING = "pendente"
 PROPOSAL_STATUS_NEGOTIATING = "em_negociacao"

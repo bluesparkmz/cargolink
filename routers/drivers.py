@@ -15,8 +15,8 @@ from controllers.drivers_controller import (
 from controllers.location_controller import update_driver_location
 from deps import get_current_user
 from database import get_db
-from models import Driver, User
-from schemas import (
+from models.models import Driver, User
+from schemas.schemas import (
     AvailabilityUpdateRequest,
     DriverDetailResponse,
     DriverListItem,

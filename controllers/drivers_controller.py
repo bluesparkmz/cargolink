@@ -5,8 +5,8 @@ Controller de motoristas: perfil, disponibilidade e listagem.
 from fastapi import HTTPException, status
 from sqlalchemy.orm import Session, joinedload
 
-from models import Driver, User
-from schemas import DriverProfileUpdateRequest
+from models.models import Driver, User
+from schemas.schemas import DriverProfileUpdateRequest
 
 
 def require_driver(user: User) -> None:

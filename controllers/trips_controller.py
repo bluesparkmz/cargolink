@@ -14,8 +14,8 @@ from constants import (
     TRIP_STATUS_WAITING,
     TRIP_STATUS_WAITING_CLIENT,
 )
-from models import Client, Company, Driver, Load, Trip, TripLocation, User, Vehicle
-from schemas import TripLocationCreateRequest, TripStartRequest
+from models.models import Client, Company, Driver, Load, Trip, TripLocation, User, Vehicle
+from schemas.schemas import TripLocationCreateRequest, TripStartRequest
 
 
 def get_trip_detail(db: Session, trip_id: int) -> Trip:

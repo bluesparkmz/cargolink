@@ -18,8 +18,8 @@ from constants import (
     TRANSACTION_STATUS_PENDING,
     TRANSACTION_TYPE_DEPOSIT,
 )
-from models import Payment, Transaction, User, Wallet
-from schemas import WalletDepositRequest
+from models.models import Payment, Transaction, User, Wallet
+from schemas.schemas import WalletDepositRequest
 
 
 def get_or_create_wallet(db: Session, user: User) -> Wallet:
