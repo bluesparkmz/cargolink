@@ -40,26 +40,27 @@ def frontend_test():
       font-family: Arial, sans-serif;
       font-size: 14px;
     }
-    main { padding: 10px; }
-    h1 { font-size: 18px; margin: 0; }
+    main { padding: 10px; margin-top: 60px; }
+    h1 { font-size: 16px; margin: 0; line-height: 1; }
     h2 { font-size: 15px; margin: 0 0 8px; }
     h3 { font-size: 13px; margin: 0 0 6px; color: var(--accent); }
     a { color: var(--accent); }
     .topbar {
-      position: sticky;
+      position: fixed;
       top: 0;
+      left: 0;
+      right: 0;
       z-index: 2;
       display: flex;
       gap: 10px;
       align-items: center;
       justify-content: space-between;
-      padding: 10px;
+      padding: 8px 10px;
+      height: 60px;
       background: var(--panel);
-      border: 1px solid var(--line);
-      border-radius: 8px;
-      margin-bottom: 10px;
+      border-bottom: 1px solid var(--line);
     }
-    .top-meta { display: flex; gap: 12px; flex-wrap: wrap; align-items: center; color: var(--muted); }
+    .top-meta { display: flex; gap: 8px; flex-wrap: nowrap; align-items: center; color: var(--muted); overflow-x: auto; }
     .shell {
       display: grid;
       grid-template-columns: minmax(0, 1fr) minmax(360px, 42vw);
@@ -74,11 +75,19 @@ def frontend_test():
       padding: 10px;
     }
     .output-panel {
-      position: sticky;
-      top: 78px;
-      max-height: calc(100vh - 88px);
+      position: fixed;
+      top: 60px;
+      right: 10px;
+      width: 42vw;
+      max-width: calc(100vw - 380px);
+      height: calc(100vh - 70px);
+      max-height: calc(100vh - 70px);
       display: grid;
       grid-template-rows: auto minmax(0, 1fr);
+      border: 1px solid var(--line);
+      background: var(--panel);
+      border-radius: 8px;
+      padding: 10px;
     }
     form { display: grid; gap: 6px; margin: 0; }
     label { display: grid; gap: 3px; color: var(--muted); font-size: 12px; }
@@ -135,7 +144,7 @@ def frontend_test():
     .json-null { color: #fca5a5; }
     @media (max-width: 980px) {
       .shell { grid-template-columns: 1fr; }
-      .output-panel { position: static; max-height: none; }
+      .output-panel { position: relative; top: auto; right: auto; width: 100%; max-width: 100%; height: auto; max-height: 55vh; }
       pre { max-height: 55vh; }
     }
   </style>
