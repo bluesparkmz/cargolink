@@ -29,6 +29,7 @@ from routers.trips import router as trips_router
 from routers.users import router as users_router
 from routers.vehicles import router as vehicles_router
 from routers.wallet import router as wallet_router
+from routers.websocket_router import router as websocket_router
 
 # Importa modelos para o SQLAlchemy registar todas as tabelas
 import models.models  # noqa: F401
@@ -80,6 +81,7 @@ app.include_router(vehicles_router, prefix="/vehicles", tags=["Vehicles"])
 app.include_router(wallet_router, prefix="/wallet", tags=["Wallet"])
 app.include_router(notifications_router, prefix="/notifications", tags=["Notifications"])
 app.include_router(messages_router, prefix="/messages", tags=["Messages"])
+app.include_router(websocket_router, tags=["Realtime"])
 
 
 def custom_openapi():
