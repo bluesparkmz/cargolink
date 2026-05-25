@@ -104,6 +104,14 @@ def frontend_test():
       padding: 6px 10px;
     }
     button:hover { border-color: var(--accent); }
+    button.get { border-left: 3px solid #0ea5e9; }
+    button.get:hover { background: rgba(14, 165, 233, 0.15); }
+    button.post { border-left: 3px solid #10b981; }
+    button.post:hover { background: rgba(16, 185, 129, 0.15); }
+    button.patch { border-left: 3px solid #f59e0b; }
+    button.patch:hover { background: rgba(245, 158, 11, 0.15); }
+    button.delete { border-left: 3px solid #ef4444; }
+    button.delete:hover { background: rgba(239, 68, 68, 0.15); }
     .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 4px; }
     .row { display: flex; gap: 4px; flex-wrap: wrap; align-items: center; }
     .row button { width: auto; }
