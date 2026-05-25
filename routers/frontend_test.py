@@ -471,6 +471,7 @@ async function registerUser(event) {
       setStatus("Cadastro feito, token guardado");
       document.getElementById("registerDialog").close();
       await api("/auth/me");
+      setStatus("Cadastro feito, token confirmado");
     }
   });
 }
@@ -484,6 +485,7 @@ async function loginUser(event) {
       setStatus("Login feito, token guardado");
       document.getElementById("loginDialog").close();
       await api("/auth/me");
+      setStatus("Login feito, token confirmado");
     }
   });
 }
