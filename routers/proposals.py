@@ -7,18 +7,25 @@ from sqlalchemy.orm import Session
 
 from controllers.proposals_controller import (
     accept_proposal_by_id,
+    accept_counter_offer,
+    create_counter_offer,
     get_proposal_detail,
     list_my_received_proposals,
     list_my_sent_proposals,
+    list_proposal_negotiations,
+    reject_counter_offer,
     reject_proposal_by_id,
     send_proposal,
 )
 from database import get_db
 from deps import get_current_user
-from models import LoadProposal, User
+from models import LoadProposal, ProposalNegotiation, User
 from schemas import (
     LoadProposalCreateRequest,
     LoadProposalDetailResponse,
+    ProposalNegotiationCreateRequest,
+    ProposalNegotiationDetailResponse,
+    ProposalNegotiationResponse,
     ProposalCompanySummary,
     ProposalDriverSummary,
     ProposalLoadSummary,
@@ -90,6 +97,30 @@ def _proposal_to_detail(proposal: LoadProposal) -> LoadProposalDetailResponse:
     )
 
 
+def _negotiation_to_response(item: ProposalNegotiation) -> ProposalNegotiationResponse:
+    return ProposalNegotiationResponse(
+        id=item.id,
+        proposal_id=item.proposal_id,
+        sender_id=item.sender_id,
+        sender_name=item.sender.name if item.sender else None,
+        sender_type=item.sender.user_type if item.sender else None,
+        amount=float(item.amount),
+        message=item.message,
+        status=item.status,
+        created_at=item.created_at,
+    )
+
+
+def _proposal_with_negotiations(
+    proposal: LoadProposal,
+    negotiations: list[ProposalNegotiation],
+) -> ProposalNegotiationDetailResponse:
+    return ProposalNegotiationDetailResponse(
+        proposal=_proposal_to_detail(proposal),
+        negotiations=[_negotiation_to_response(item) for item in negotiations],
+    )
+
+
 @router.post("/loads/{load_id}", response_model=LoadProposalDetailResponse, status_code=201)
 def create_for_load(
     load_id: int,
@@ -131,6 +162,63 @@ def get_by_id(
 ):
     """Detalhe de uma proposta."""
     return _proposal_to_detail(get_proposal_detail(db, current_user, proposal_id))
+
+
+@router.get("/{proposal_id}/negotiations", response_model=ProposalNegotiationDetailResponse)
+def get_negotiations(
+    proposal_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Historico de negociacao de uma proposta."""
+    proposal = get_proposal_detail(db, current_user, proposal_id)
+    negotiations = list_proposal_negotiations(db, current_user, proposal_id)
+    return _proposal_with_negotiations(proposal, negotiations)
+
+
+@router.post(
+    "/{proposal_id}/negotiations",
+    response_model=ProposalNegotiationResponse,
+    status_code=201,
+)
+def create_negotiation(
+    proposal_id: int,
+    data: ProposalNegotiationCreateRequest,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Cliente ou empresa sugere outro valor."""
+    return _negotiation_to_response(create_counter_offer(db, current_user, proposal_id, data))
+
+
+@router.post(
+    "/{proposal_id}/negotiations/{negotiation_id}/accept",
+    response_model=LoadProposalDetailResponse,
+)
+def accept_negotiation(
+    proposal_id: int,
+    negotiation_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Aceita uma contraproposta e cria a viagem."""
+    proposal = accept_counter_offer(db, current_user, proposal_id, negotiation_id)
+    return _proposal_to_detail(proposal)
+
+
+@router.post(
+    "/{proposal_id}/negotiations/{negotiation_id}/reject",
+    response_model=LoadProposalDetailResponse,
+)
+def reject_negotiation(
+    proposal_id: int,
+    negotiation_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Recusa uma contraproposta e encerra a proposta."""
+    proposal = reject_counter_offer(db, current_user, proposal_id, negotiation_id)
+    return _proposal_to_detail(proposal)
 
 
 @router.post("/{proposal_id}/accept", response_model=LoadProposalDetailResponse)

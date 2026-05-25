@@ -46,8 +46,38 @@ Status atuais:
 
 ```text
 pendente
+em_negociacao
 aceite
 recusada
+```
+
+## Modelo de negociacao
+
+Tabela:
+
+```text
+proposal_negotiations
+```
+
+Campos:
+
+```text
+id
+proposal_id
+sender_id
+valor
+mensagem
+status
+created_at
+```
+
+Status dos itens de negociacao:
+
+```text
+pendente
+aceite
+recusada
+substituida
 ```
 
 ## Autenticacao
@@ -294,33 +324,111 @@ POST /loads/{load_id}/proposals/{proposal_id}/reject
 
 ## Negociacao
 
-Neste momento ainda nao existe uma tabela propria de negociacao ou
-contrapropostas.
+Negociacao e feita por contrapropostas fechadas sobre uma proposta existente.
 
-O que existe hoje:
-
-- `Load.negotiable` indica se a carga aceita negociacao.
-- `LoadProposal.proposed_value` guarda o valor proposto.
-- `LoadProposal.message` guarda a mensagem inicial da empresa.
-- `/messages/loads/{load_id}` permite conversa livre entre as partes.
-
-Para uma negociacao completa no futuro, o ideal sera criar uma tabela propria,
-por exemplo:
+Fluxo:
 
 ```text
-proposal_negotiations
+1. Empresa envia proposta inicial
+2. Cliente aceita, recusa ou sugere outro valor
+3. Empresa aceita, recusa ou sugere outro valor
+4. O ciclo repete ate alguem aceitar ou recusar
 ```
 
-Com campos como:
+### Ver historico de negociacao
+
+```http
+GET /proposals/{proposal_id}/negotiations
+```
+
+Permissao:
 
 ```text
-proposal_id
-sender_id
-amount
-delivery_days
-message
-status
-created_at
+cliente dono da carga
+empresa dona da proposta
+motorista indicado na proposta
+admin
+```
+
+### Sugerir outro valor
+
+```http
+POST /proposals/{proposal_id}/negotiations
+```
+
+Permissao:
+
+```text
+cliente dono da carga
+empresa dona da proposta
+```
+
+Body:
+
+```json
+{
+  "amount": 24800,
+  "message": "Consigo fechar neste valor."
+}
+```
+
+Regras:
+
+- A carga precisa aceitar negociacao (`negotiable = true`).
+- A proposta nao pode estar `aceite` nem `recusada`.
+- A empresa nao pode iniciar nova contraproposta sem resposta do cliente.
+- Quem enviou a ultima contraproposta pendente precisa aguardar a outra parte.
+- Ao criar contraproposta, a proposta fica `em_negociacao`.
+
+### Aceitar contraproposta
+
+```http
+POST /proposals/{proposal_id}/negotiations/{negotiation_id}/accept
+```
+
+Permissao:
+
+```text
+cliente dono da carga
+empresa dona da proposta
+```
+
+Efeito:
+
+- A contraproposta fica `aceite`.
+- `load_proposals.valor_proposto` passa a ser o valor aceite.
+- A proposta fica `aceite`.
+- As outras propostas pendentes/em negociacao da mesma carga ficam `recusada`.
+- A carga fica `aceite`.
+- O sistema cria uma viagem.
+
+### Recusar contraproposta
+
+```http
+POST /proposals/{proposal_id}/negotiations/{negotiation_id}/reject
+```
+
+Permissao:
+
+```text
+cliente dono da carga
+empresa dona da proposta
+```
+
+Efeito:
+
+- A contraproposta fica `recusada`.
+- A proposta fica `recusada`.
+- A negociacao encerra.
+
+Exemplo:
+
+```text
+1. Empresa envia proposta: 28.000 MT
+2. Cliente sugere: 24.500 MT
+3. Empresa sugere: 25.000 MT
+4. Cliente aceita 25.000 MT
+5. Sistema cria viagem
 ```
 
 ## Resumo das rotas
@@ -330,6 +438,10 @@ POST /proposals/loads/{load_id}
 GET  /proposals/me
 GET  /proposals/received
 GET  /proposals/{proposal_id}
+GET  /proposals/{proposal_id}/negotiations
+POST /proposals/{proposal_id}/negotiations
+POST /proposals/{proposal_id}/negotiations/{negotiation_id}/accept
+POST /proposals/{proposal_id}/negotiations/{negotiation_id}/reject
 POST /proposals/{proposal_id}/accept
 POST /proposals/{proposal_id}/reject
 ```

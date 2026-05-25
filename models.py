@@ -255,6 +255,27 @@ class LoadProposal(Base):
     company: Mapped[Company | None] = relationship(back_populates="proposals")
     driver: Mapped[Driver | None] = relationship()
     vehicle: Mapped[Vehicle | None] = relationship()
+    negotiations: Mapped[list["ProposalNegotiation"]] = relationship(
+        back_populates="proposal",
+        cascade="all, delete-orphan",
+    )
+
+
+class ProposalNegotiation(Base):
+    """Historico de contrapropostas ligadas a uma proposta."""
+
+    __tablename__ = "proposal_negotiations"
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    proposal_id: Mapped[int] = mapped_column(ForeignKey("load_proposals.id", ondelete="CASCADE"))
+    sender_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"))
+    amount: Mapped[Decimal] = mapped_column("valor", Numeric(12, 2), nullable=False)
+    message: Mapped[str | None] = mapped_column("mensagem", Text)
+    status: Mapped[str] = mapped_column(String(30), default="pendente")
+    created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
+
+    proposal: Mapped[LoadProposal] = relationship(back_populates="negotiations")
+    sender: Mapped[User] = relationship()
 
 
 # ---------------------------------------------------------------------------

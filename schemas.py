@@ -616,6 +616,34 @@ class LoadProposalDetailResponse(LoadProposalResponse):
     vehicle: ProposalVehicleSummary | None = None
 
 
+class ProposalNegotiationCreateRequest(BaseModel):
+    """Criar contraproposta com novo valor."""
+
+    amount: float = Field(..., gt=0)
+    message: str | None = Field(None, max_length=1000)
+
+
+class ProposalNegotiationResponse(BaseModel):
+    """Item do historico de negociacao."""
+
+    id: int
+    proposal_id: int
+    sender_id: int
+    sender_name: str | None = None
+    sender_type: str | None = None
+    amount: float
+    message: str | None = None
+    status: str
+    created_at: datetime
+
+
+class ProposalNegotiationDetailResponse(BaseModel):
+    """Proposta com historico de negociacao."""
+
+    proposal: LoadProposalDetailResponse
+    negotiations: list[ProposalNegotiationResponse]
+
+
 # ---------------------------------------------------------------------------
 # Viagens
 # ---------------------------------------------------------------------------

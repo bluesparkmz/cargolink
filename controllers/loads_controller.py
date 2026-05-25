@@ -668,7 +668,7 @@ def accept_proposal(db: Session, user: User, load_id: int, proposal_id: int) -> 
     )
     if proposal is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Proposta não encontrada")
-    if proposal.status != "pendente":
+    if proposal.status not in ("pendente", "em_negociacao"):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Proposta já foi processada",
@@ -721,7 +721,7 @@ def reject_proposal(db: Session, user: User, load_id: int, proposal_id: int) -> 
     )
     if proposal is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Proposta não encontrada")
-    if proposal.status != "pendente":
+    if proposal.status not in ("pendente", "em_negociacao"):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Proposta já foi processada",
