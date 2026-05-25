@@ -1031,3 +1031,30 @@ class LoadTrackingResponse(BaseModel):
     trackable: bool
     locations: list[TripLocationResponse] = []
     last_location: TripLocationResponse | None = None
+
+
+# ---------------------------------------------------------------------------
+# Avaliacoes
+# ---------------------------------------------------------------------------
+
+
+class RatingCreateRequest(BaseModel):
+    """Avaliar um participante apos viagem concluida."""
+
+    rated_user_id: int = Field(..., gt=0)
+    score: int = Field(..., ge=1, le=5)
+    comment: str | None = Field(None, max_length=1000)
+
+
+class RatingResponse(BaseModel):
+    """Avaliacao de uma viagem."""
+
+    id: int
+    trip_id: int
+    rater_id: int | None = None
+    rated_user_id: int | None = None
+    score: int | None = None
+    comment: str | None = None
+    created_at: datetime
+
+    model_config = {"from_attributes": True}

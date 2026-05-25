@@ -20,6 +20,7 @@ ALLOWED_DOCS = {
     "clients": "clients.md",
     "driver": "driver.md",
     "proposals": "proposals.md",
+    "ratings": "ratings.md",
     "trips": "trips.md",
     "websocket": "websocket.md",
 }
@@ -30,6 +31,7 @@ DOC_NAV_ITEMS = (
     ("documentation/clients", "Cliente"),
     ("documentation/driver", "Motorista"),
     ("documentation/proposals", "Propostas"),
+    ("documentation/ratings", "Avaliacoes"),
     ("documentation/trips", "Viagens"),
     ("documentation/websocket", "WebSocket"),
 )
@@ -401,6 +403,7 @@ def render_documentation_index() -> str:
             ("clients", "Cliente", "Cargas, propostas recebidas, tracking e entrega."),
             ("driver", "Motorista", "Viagens atribuidas, GPS, paragens e chegada."),
             ("proposals", "Propostas", "Envio, contrapropostas, aceite e recusa."),
+            ("ratings", "Avaliacoes", "Notas apos viagem concluida e reputacao."),
             ("trips", "Viagens", "Estados, GPS, tracking e confirmacao de entrega."),
             ("websocket", "WebSocket", "Realtime para GPS, mensagens e notificacoes."),
         )
