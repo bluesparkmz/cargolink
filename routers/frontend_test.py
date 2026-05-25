@@ -374,6 +374,22 @@ def frontend_test():
     </form>
   </dialog>
 
+  <!-- LOCATION DIALOG -->
+  <dialog id="locationDialog">
+    <div class="dialog-head">
+      <h2>Localização para Cálculo de Distâncias</h2>
+      <button onclick="document.getElementById('locationDialog').close()">✕</button>
+    </div>
+    <form onsubmit="setCustomLocation(event)">
+      <div class="row-compact" style="margin-bottom: 8px;">
+        <button type="button" onclick="useCurrentLocation()">📍 Usar Localização Atual</button>
+      </div>
+      <label>Latitude <input id="customLat" name="lat" type="number" step="0.000001" value="-25.9692"></label>
+      <label>Longitude <input id="customLng" name="lng" type="number" step="0.000001" value="32.5732"></label>
+      <button>Guardar Localização</button>
+    </form>
+  </dialog>
+
   <!-- MAIN SECTIONS -->
   <section>
     <h2>Auth & Users</h2>
@@ -381,7 +397,7 @@ def frontend_test():
       <button onclick="document.getElementById('loginDialog').showModal()">Login</button>
       <button onclick="document.getElementById('registerDialog').showModal()">Cadastro</button>
       <button onclick="safeRun(() => api('/auth/me'))">GET /auth/me</button>
-      <button onclick="safeRun(() => api('/auth/password', { method: 'PATCH' }))">Mudar Senha</button>
+      <button onclick="document.getElementById('locationDialog').showModal()">📍 Localização</button>
     </div>
   </section>
 
@@ -436,7 +452,8 @@ def frontend_test():
     <div class="row-compact">
       <button onclick="safeRun(() => api('/loads/types', { auth: false }))">GET /loads/types</button>
       <button onclick="safeRun(() => api('/loads/fill-types', { auth: false }))">GET /loads/fill-types</button>
-      <button onclick="safeRun(() => api('/loads'))">GET /loads</button>
+      <button onclick="safeRun(listLoadsWithDistance)">GET /loads com km</button>
+      <button onclick="safeRun(() => api('/loads'))">GET /loads (sem km)</button>
       <button onclick="safeRun(() => api('/loads/me'))">GET /loads/me</button>
       <button onclick="safeRun(() => requestById('/loads/', 'Load ID'))">GET /loads/{id}</button>
       <button onclick="safeRun(() => requestById('/loads/', 'Load ID', '/tracking'))">GET /loads/{id}/tracking</button>
@@ -771,6 +788,123 @@ async function manualRequest(e) {
     body = JSON.parse(f.elements.body.value || "{}");
   }
   await safeRun(() => api(path, { method, json: body }));
+}
+
+// Função para calcular distância entre dois pontos (Haversine formula)
+function calculateDistance(lat1, lon1, lat2, lon2) {
+  const R = 6371; // Raio da Terra em km
+  const dLat = (lat2 - lat1) * Math.PI / 180;
+  const dLon = (lon2 - lon1) * Math.PI / 180;
+  const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+    Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+    Math.sin(dLon / 2) * Math.sin(dLon / 2);
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  return Math.round(R * c * 10) / 10; // Retorna com 1 casa decimal
+}
+
+// Obter localização atual do usuário
+function getCurrentLocation() {
+  return new Promise((resolve, reject) => {
+    if (!navigator.geolocation) {
+      reject(new Error("Geolocalização não suportada"));
+      return;
+    }
+    navigator.geolocation.getCurrentPosition(
+      (pos) => resolve({ lat: pos.coords.latitude, lng: pos.coords.longitude }),
+      (err) => reject(new Error("Permissão de localização negada"))
+    );
+  });
+}
+
+// Armazenar localização customizada
+const userLocationKey = "cargolink_user_location";
+
+function getUserLocation() {
+  const saved = localStorage.getItem(userLocationKey);
+  if (saved) {
+    return JSON.parse(saved);
+  }
+  return null;
+}
+
+function saveUserLocation(lat, lng) {
+  localStorage.setItem(userLocationKey, JSON.stringify({ lat, lng }));
+  setStatus("Localização salva: " + lat.toFixed(4) + ", " + lng.toFixed(4));
+}
+
+async function useCurrentLocation() {
+  try {
+    setStatus("Obtendo localização...");
+    const loc = await getCurrentLocation();
+    document.getElementById("customLat").value = loc.lat.toFixed(6);
+    document.getElementById("customLng").value = loc.lng.toFixed(6);
+    saveUserLocation(loc.lat, loc.lng);
+  } catch (err) {
+    setStatus("Erro: " + err.message);
+  }
+}
+
+function setCustomLocation(e) {
+  e.preventDefault();
+  const lat = parseFloat(document.getElementById("customLat").value);
+  const lng = parseFloat(document.getElementById("customLng").value);
+  if (isNaN(lat) || isNaN(lng)) {
+    setStatus("Coordenadas inválidas");
+    return;
+  }
+  saveUserLocation(lat, lng);
+  document.getElementById("locationDialog").close();
+}
+
+// Listar cargas com distâncias
+async function listLoadsWithDistance() {
+  try {
+    let userLoc = getUserLocation();
+    
+    if (!userLoc) {
+      setStatus("Obtendo localização...");
+      userLoc = await getCurrentLocation();
+      saveUserLocation(userLoc.lat, userLoc.lng);
+    }
+    
+    setStatus("Carregando cargas...");
+    const response = await fetch("/loads", {
+      headers: getToken() ? { Authorization: "Bearer " + getToken() } : {},
+    });
+    const loads = await response.json();
+    
+    if (!Array.isArray(loads)) {
+      write({ status: response.status, ok: response.ok, body: loads });
+      return;
+    }
+    
+    // Adicionar distâncias aos dados
+    const loadsWithDistance = loads.map(load => {
+      const distFromUser = calculateDistance(
+        userLoc.lat, userLoc.lng,
+        load.origin_lat, load.origin_lng
+      );
+      const distRoute = calculateDistance(
+        load.origin_lat, load.origin_lng,
+        load.destination_lat, load.destination_lng
+      );
+      return {
+        ...load,
+        "📍 km (você até origem)": distFromUser,
+        "🛣️ km (rota)": distRoute
+      };
+    });
+    
+    write({
+      sua_localizacao: { lat: userLoc.lat.toFixed(4), lng: userLoc.lng.toFixed(4) },
+      total_cargas: loadsWithDistance.length,
+      cargas: loadsWithDistance
+    });
+    setStatus("OK: " + loadsWithDistance.length + " cargas com distâncias");
+  } catch (err) {
+    setStatus("Erro: " + err.message);
+    write({ error: err.message });
+  }
 }
 
 updateTokenState();
