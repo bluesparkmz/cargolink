@@ -134,7 +134,7 @@ def create_for_load(
 
 @router.get("/me", response_model=list[LoadProposalDetailResponse])
 def get_my_sent(
-    status: str | None = Query(None, description="Filtrar por pendente, aceite ou recusada"),
+    status: str | None = Query(None, description="Filtrar por pendente, em_negociacao, aceite ou recusada"),
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
@@ -145,7 +145,7 @@ def get_my_sent(
 
 @router.get("/received", response_model=list[LoadProposalDetailResponse])
 def get_my_received(
-    status: str | None = Query(None, description="Filtrar por pendente, aceite ou recusada"),
+    status: str | None = Query(None, description="Filtrar por pendente, em_negociacao, aceite ou recusada"),
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):

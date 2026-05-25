@@ -19,6 +19,7 @@ ALLOWED_DOCS = {
     "company": "company.md",
     "clients": "clients.md",
     "driver": "driver.md",
+    "proposals": "proposals.md",
 }
 
 DOC_NAV_ITEMS = (
@@ -26,6 +27,7 @@ DOC_NAV_ITEMS = (
     ("documentation/company", "Empresa"),
     ("documentation/clients", "Cliente"),
     ("documentation/driver", "Motorista"),
+    ("documentation/proposals", "Propostas"),
 )
 
 PYGMENTS_FORMATTER = HtmlFormatter(nowrap=True)
@@ -394,6 +396,7 @@ def render_documentation_index() -> str:
             ("company", "Empresa", "Frota, motoristas, propostas e viagens."),
             ("clients", "Cliente", "Cargas, propostas recebidas, tracking e entrega."),
             ("driver", "Motorista", "Viagens atribuidas, GPS, paragens e chegada."),
+            ("proposals", "Propostas", "Envio, contrapropostas, aceite e recusa."),
         )
     )
     return f"""<!doctype html>

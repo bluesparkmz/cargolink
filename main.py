@@ -18,6 +18,7 @@ from routers.companies import router as companies_router
 from routers.documents import router as documents_router
 from routers.documentation import router as documentation_router
 from routers.drivers import router as drivers_router
+from routers.frontend_test import router as frontend_test_router
 from routers.loads import router as loads_router
 from routers.driver_trips import router as driver_trips_router
 from routers.messages import router as messages_router
@@ -69,6 +70,7 @@ app.include_router(companies_router, prefix="/companies", tags=["Companies"])
 app.include_router(documents_router, prefix="/documents", tags=["Documents"])
 app.include_router(documentation_router, prefix="/documentation", tags=["Documentation"])
 app.include_router(drivers_router, prefix="/drivers", tags=["Drivers"])
+app.include_router(frontend_test_router, prefix="/frontend-test", tags=["Frontend Test"])
 app.include_router(loads_router, prefix="/loads", tags=["Loads"])
 app.include_router(proposals_router, prefix="/proposals", tags=["Proposals"])
 app.include_router(trips_router, prefix="/trips", tags=["Trips"])

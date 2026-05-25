@@ -7,19 +7,21 @@ from decimal import Decimal
 from fastapi import HTTPException, status
 from sqlalchemy.orm import Session, joinedload
 
+from constants import (
+    LOAD_STATUS_ACCEPTED,
+    LOAD_STATUS_AVAILABLE,
+    NEGOTIATION_STATUS_ACCEPTED,
+    NEGOTIATION_STATUS_PENDING,
+    NEGOTIATION_STATUS_REJECTED,
+    NEGOTIATION_STATUS_REPLACED,
+    PROPOSAL_OPEN_STATUSES,
+    PROPOSAL_STATUS_ACCEPTED,
+    PROPOSAL_STATUS_NEGOTIATING,
+    PROPOSAL_STATUS_REJECTED,
+)
 from controllers.loads_controller import accept_proposal, create_proposal, reject_proposal
 from models.models import Client, Company, Driver, Load, LoadProposal, ProposalNegotiation, Trip, User
 from schemas.schemas import LoadProposalCreateRequest, ProposalNegotiationCreateRequest
-
-PROPOSAL_STATUS_PENDING = "pendente"
-PROPOSAL_STATUS_NEGOTIATING = "em_negociacao"
-PROPOSAL_STATUS_ACCEPTED = "aceite"
-PROPOSAL_STATUS_REJECTED = "recusada"
-
-NEGOTIATION_STATUS_PENDING = "pendente"
-NEGOTIATION_STATUS_ACCEPTED = "aceite"
-NEGOTIATION_STATUS_REJECTED = "recusada"
-NEGOTIATION_STATUS_REPLACED = "substituida"
 
 
 def _proposal_options():
@@ -130,12 +132,26 @@ def _ensure_open_for_negotiation(proposal: LoadProposal) -> None:
         )
 
 
+def _ensure_load_allows_negotiation(proposal: LoadProposal) -> None:
+    if proposal.load is not None and not proposal.load.negotiable:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Esta carga nao aceita negociacao",
+        )
+
+
+def _reject_pending_negotiations(proposal: LoadProposal) -> None:
+    for negotiation in proposal.negotiations:
+        if negotiation.status == NEGOTIATION_STATUS_PENDING:
+            negotiation.status = NEGOTIATION_STATUS_REJECTED
+
+
 def _close_proposal_as_accepted(db: Session, proposal: LoadProposal) -> None:
     """Fecha proposta como aceite e cria viagem sem depender do papel do utilizador."""
     load = proposal.load or db.query(Load).filter(Load.id == proposal.load_id).first()
     if load is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Carga nao encontrada")
-    if load.status != "disponivel":
+    if load.status != LOAD_STATUS_AVAILABLE:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Carga ja nao esta disponivel",
@@ -149,19 +165,20 @@ def _close_proposal_as_accepted(db: Session, proposal: LoadProposal) -> None:
         )
 
     proposal.status = PROPOSAL_STATUS_ACCEPTED
+    _reject_pending_negotiations(proposal)
     other_proposals = (
         db.query(LoadProposal)
         .filter(
             LoadProposal.load_id == proposal.load_id,
             LoadProposal.id != proposal.id,
-            LoadProposal.status.in_([PROPOSAL_STATUS_PENDING, PROPOSAL_STATUS_NEGOTIATING]),
+            LoadProposal.status.in_(PROPOSAL_OPEN_STATUSES),
         )
         .all()
     )
     for other in other_proposals:
         other.status = PROPOSAL_STATUS_REJECTED
 
-    load.status = "aceite"
+    load.status = LOAD_STATUS_ACCEPTED
     db.add(
         Trip(
             load_id=proposal.load_id,
@@ -175,11 +192,7 @@ def _close_proposal_as_accepted(db: Session, proposal: LoadProposal) -> None:
 def _close_proposal_as_rejected(proposal: LoadProposal) -> None:
     """Fecha proposta como recusada sem depender do papel do utilizador."""
     proposal.status = PROPOSAL_STATUS_REJECTED
-    if proposal.load is not None and not proposal.load.negotiable:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Esta carga nao aceita negociacao",
-        )
+    _reject_pending_negotiations(proposal)
 
 
 def send_proposal(
@@ -274,6 +287,7 @@ def create_counter_offer(
     proposal = _query_proposal(db, proposal_id)
     user_side = _user_side_for_proposal(db, user, proposal)
     _ensure_open_for_negotiation(proposal)
+    _ensure_load_allows_negotiation(proposal)
 
     latest_pending = _latest_pending_negotiation(proposal)
     if latest_pending is None and user_side == "empresa":

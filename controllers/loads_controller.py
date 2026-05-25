@@ -17,15 +17,35 @@ from config import settings
 from constants import (
     LOAD_FILL_IDS,
     LOAD_FILL_LABELS,
+    LOAD_STATUS_ACCEPTED,
+    LOAD_STATUS_AVAILABLE,
     LOAD_TYPE_IDS,
     LOAD_TYPE_LABELS,
     MAX_LOAD_IMAGES,
+    NEGOTIATION_STATUS_PENDING,
+    NEGOTIATION_STATUS_REJECTED,
+    PROPOSAL_OPEN_STATUSES,
+    PROPOSAL_STATUS_ACCEPTED,
+    PROPOSAL_STATUS_REJECTED,
     ROUTE_AVG_SPEED_KMH_MAX,
     ROUTE_AVG_SPEED_KMH_MIN,
     WEIGHT_UNITS,
 )
-from models.models import Client, Company, Driver, Load, LoadImage, LoadProposal, Rating, Trip, TripLocation, User, Vehicle
 from controllers.trips_controller import _user_can_access_trip
+from models.models import (
+    Client,
+    Company,
+    Driver,
+    Load,
+    LoadImage,
+    LoadProposal,
+    ProposalNegotiation,
+    Rating,
+    Trip,
+    TripLocation,
+    User,
+    Vehicle,
+)
 from schemas.schemas import (
     LoadCreateRequest,
     LoadCreateRequestForm,
@@ -602,7 +622,7 @@ def create_proposal(
     _validate_company_trip_resources(db, company, data.driver_id, data.vehicle_id)
     load = get_load_detail(db, load_id)
 
-    if load.status != "disponivel":
+    if load.status != LOAD_STATUS_AVAILABLE:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Carga não está disponível para propostas",
@@ -655,7 +675,7 @@ def accept_proposal(db: Session, user: User, load_id: int, proposal_id: int) -> 
     if load.client_id != client.id:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Carga de outro cliente")
 
-    if load.status != "disponivel":
+    if load.status != LOAD_STATUS_AVAILABLE:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Carga já não está disponível",
@@ -668,7 +688,7 @@ def accept_proposal(db: Session, user: User, load_id: int, proposal_id: int) -> 
     )
     if proposal is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Proposta não encontrada")
-    if proposal.status not in ("pendente", "em_negociacao"):
+    if proposal.status not in PROPOSAL_OPEN_STATUSES:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Proposta já foi processada",
@@ -681,20 +701,37 @@ def accept_proposal(db: Session, user: User, load_id: int, proposal_id: int) -> 
             detail="Esta carga já tem viagem associada",
         )
 
-    proposal.status = "aceite"
+    proposal.status = PROPOSAL_STATUS_ACCEPTED
+    (
+        db.query(ProposalNegotiation)
+        .filter(
+            ProposalNegotiation.proposal_id == proposal.id,
+            ProposalNegotiation.status == NEGOTIATION_STATUS_PENDING,
+        )
+        .update({"status": NEGOTIATION_STATUS_REJECTED}, synchronize_session=False)
+    )
     other_proposals = (
         db.query(LoadProposal)
         .filter(
             LoadProposal.load_id == load_id,
             LoadProposal.id != proposal_id,
-            LoadProposal.status == "pendente",
+            LoadProposal.status.in_(PROPOSAL_OPEN_STATUSES),
         )
         .all()
     )
     for other in other_proposals:
-        other.status = "recusada"
+        other.status = PROPOSAL_STATUS_REJECTED
+    if other_proposals:
+        (
+            db.query(ProposalNegotiation)
+            .filter(
+                ProposalNegotiation.proposal_id.in_([item.id for item in other_proposals]),
+                ProposalNegotiation.status == NEGOTIATION_STATUS_PENDING,
+            )
+            .update({"status": NEGOTIATION_STATUS_REJECTED}, synchronize_session=False)
+        )
 
-    load.status = "aceite"
+    load.status = LOAD_STATUS_ACCEPTED
     trip = Trip(
         load_id=load_id,
         company_id=proposal.company_id,
@@ -721,13 +758,21 @@ def reject_proposal(db: Session, user: User, load_id: int, proposal_id: int) -> 
     )
     if proposal is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Proposta não encontrada")
-    if proposal.status not in ("pendente", "em_negociacao"):
+    if proposal.status not in PROPOSAL_OPEN_STATUSES:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Proposta já foi processada",
         )
 
-    proposal.status = "recusada"
+    proposal.status = PROPOSAL_STATUS_REJECTED
+    (
+        db.query(ProposalNegotiation)
+        .filter(
+            ProposalNegotiation.proposal_id == proposal.id,
+            ProposalNegotiation.status == NEGOTIATION_STATUS_PENDING,
+        )
+        .update({"status": NEGOTIATION_STATUS_REJECTED}, synchronize_session=False)
+    )
     db.commit()
     db.refresh(proposal)
     return proposal
