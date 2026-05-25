@@ -1,5 +1,5 @@
 """
-Pagina HTML simples para testar fluxos da API manualmente.
+Pagina HTML completa para testar todos os endpoints da API.
 """
 
 from fastapi import APIRouter
@@ -16,7 +16,7 @@ def frontend_test():
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>CargoLink API Test</title>
+  <title>CargoLink API Test - Completo</title>
   <style>
     :root {
       color-scheme: dark;
@@ -38,12 +38,12 @@ def frontend_test():
       background: var(--bg);
       color: var(--text);
       font-family: Arial, sans-serif;
-      font-size: 14px;
+      font-size: 13px;
     }
     main { padding: 10px; margin-top: 60px; }
     h1 { font-size: 16px; margin: 0; line-height: 1; }
-    h2 { font-size: 15px; margin: 0 0 8px; }
-    h3 { font-size: 13px; margin: 0 0 6px; color: var(--accent); }
+    h2 { font-size: 14px; margin: 8px 0 6px; font-weight: bold; color: var(--accent); border-bottom: 1px solid var(--line); padding-bottom: 4px; }
+    h3 { font-size: 12px; margin: 0 0 4px; color: var(--muted); }
     a { color: var(--accent); }
     .topbar {
       position: fixed;
@@ -60,94 +60,92 @@ def frontend_test():
       background: var(--panel);
       border-bottom: 1px solid var(--line);
     }
-    .top-meta { display: flex; gap: 8px; flex-wrap: nowrap; align-items: center; color: var(--muted); overflow-x: auto; }
+    .top-meta { display: flex; gap: 6px; flex-wrap: nowrap; align-items: center; color: var(--muted); overflow-x: auto; font-size: 12px; }
     .shell {
       display: grid;
-      grid-template-columns: minmax(0, 1fr) minmax(360px, 42vw);
-      gap: 10px;
+      grid-template-columns: minmax(0, 1fr) minmax(320px, 38vw);
+      gap: 8px;
       align-items: start;
     }
-    .controls { display: grid; gap: 10px; }
+    .controls { display: grid; gap: 8px; }
     section, .output-panel {
       border: 1px solid var(--line);
       background: var(--panel);
-      border-radius: 8px;
-      padding: 10px;
+      border-radius: 6px;
+      padding: 8px;
     }
     .output-panel {
       position: fixed;
       top: 60px;
       right: 10px;
-      width: 42vw;
-      max-width: calc(100vw - 380px);
+      width: 38vw;
+      max-width: calc(100vw - 350px);
       height: calc(100vh - 70px);
-      max-height: calc(100vh - 70px);
       display: grid;
       grid-template-rows: auto minmax(0, 1fr);
-      border: 1px solid var(--line);
-      background: var(--panel);
-      border-radius: 8px;
-      padding: 10px;
     }
-    form { display: grid; gap: 6px; margin: 0; }
-    label { display: grid; gap: 3px; color: var(--muted); font-size: 12px; }
+    form { display: grid; gap: 4px; margin: 0; }
+    label { display: grid; gap: 2px; color: var(--muted); font-size: 11px; }
     input, select, textarea, button {
-      width: 100%;
       border: 1px solid var(--line);
-      border-radius: 6px;
+      border-radius: 4px;
       background: var(--field);
       color: var(--text);
       font: inherit;
-      padding: 7px 8px;
+      padding: 5px 6px;
     }
-    textarea { min-height: 58px; resize: vertical; }
+    input, select, textarea { width: 100%; }
+    textarea { min-height: 50px; resize: vertical; }
     button {
       cursor: pointer;
       background: #182235;
-      font-weight: 700;
+      font-weight: 600;
+      width: auto;
+      padding: 6px 10px;
     }
     button:hover { border-color: var(--accent); }
-    .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(155px, 1fr)); gap: 6px; }
-    .cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 8px; }
-    .row { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
+    .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 4px; }
+    .row { display: flex; gap: 4px; flex-wrap: wrap; align-items: center; }
     .row button { width: auto; }
-    .mini { color: var(--muted); font-size: 12px; }
-    code { color: var(--warn); }
+    .mini { color: var(--muted); font-size: 11px; margin: 2px 0; }
+    .row-compact { display: flex; gap: 4px; flex-wrap: wrap; }
+    .row-compact button { padding: 4px 8px; font-size: 11px; }
+    code { color: var(--warn); font-size: 11px; }
     pre {
       margin: 0;
       overflow: auto;
-      min-height: 240px;
+      min-height: 200px;
       max-height: 100%;
-      padding: 10px;
+      padding: 8px;
       border: 1px solid var(--line);
-      border-radius: 8px;
+      border-radius: 4px;
       background: var(--panel-2);
-      color: var(--text);
-      font-size: 12px;
-      line-height: 1.45;
+      font-size: 11px;
+      line-height: 1.4;
     }
     dialog {
-      width: min(720px, calc(100vw - 24px));
+      width: min(800px, calc(100vw - 20px));
       border: 1px solid var(--line);
-      border-radius: 10px;
+      border-radius: 8px;
       background: var(--panel);
       color: var(--text);
-      padding: 12px;
+      padding: 10px;
       max-height: 90vh;
       overflow-y: auto;
     }
-    dialog::backdrop { background: rgb(0 0 0 / 0.65); }
-    .dialog-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
-    .dialog-head button { width: auto; }
+    dialog::backdrop { background: rgb(0 0 0 / 0.7); }
+    .dialog-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
+    .dialog-head h2 { margin: 0; border: none; padding: 0; }
+    .dialog-head button { width: auto; padding: 4px 8px; }
     .json-key { color: #7dd3fc; }
     .json-string { color: #86efac; }
     .json-number { color: #fde68a; }
     .json-bool { color: #f0abfc; }
     .json-null { color: #fca5a5; }
-    @media (max-width: 980px) {
+    .section-group { margin-bottom: 6px; }
+    @media (max-width: 1200px) {
       .shell { grid-template-columns: 1fr; }
-      .output-panel { position: relative; top: auto; right: auto; width: 100%; max-width: 100%; height: auto; max-height: 55vh; }
-      pre { max-height: 55vh; }
+      .output-panel { position: relative; top: auto; right: auto; width: 100%; max-width: 100%; height: 45vh; margin-top: 8px; }
     }
   </style>
 </head>
@@ -160,245 +158,392 @@ def frontend_test():
     </div>
     <div class="top-meta">
       <span>Token: <code id="tokenState">nao</code></span>
-      <button type="button" onclick="document.getElementById('loginDialog').showModal()">Login</button>
-      <button type="button" onclick="document.getElementById('registerDialog').showModal()">Cadastro</button>
-      <button type="button" onclick="safeRun(authMe)">/auth/me</button>
-      <button type="button" onclick="clearToken()">Limpar</button>
+      <button onclick="document.getElementById('loginDialog').showModal()">Login</button>
+      <button onclick="document.getElementById('registerDialog').showModal()">Cadastro</button>
+      <button onclick="safeRun(authMe)">/auth/me</button>
+      <button onclick="clearToken()">Limpar</button>
       <a href="/docs">OpenAPI</a>
-      <a href="/documentation/proposals">Docs propostas</a>
     </div>
   </header>
 
   <div class="shell">
   <div class="controls">
 
+  <!-- DIALOGS -->
   <dialog id="registerDialog">
     <div class="dialog-head">
       <h2>Cadastro</h2>
-      <button type="button" onclick="document.getElementById('registerDialog').close()">Fechar</button>
+      <button onclick="document.getElementById('registerDialog').close()">✕</button>
     </div>
     <form onsubmit="registerUser(event)">
-      <h3>POST /auth/register</h3>
       <div class="grid">
         <label>Nome <input name="name" value="Empresa Teste"></label>
         <label>Email <input name="email" value="empresa@test.com"></label>
         <label>Senha <input name="password" value="123456" type="password"></label>
-        <label>Tipo
-          <select name="user_type">
-            <option value="empresa">empresa</option>
-            <option value="cliente">cliente</option>
-            <option value="motorista">motorista</option>
-          </select>
-        </label>
+        <label>Tipo <select name="user_type">
+          <option>empresa</option>
+          <option>cliente</option>
+          <option>motorista</option>
+        </select></label>
         <label>Telefone <input name="phone" value="840000001"></label>
-        <label>Nome empresa <input name="company_name" value="Empresa Teste Lda"></label>
+        <label>Empresa <input name="company_name" value="Teste Lda"></label>
         <label>Cidade <input name="city" value="Maputo"></label>
         <label>Provincia <input name="state" value="Maputo"></label>
       </div>
-      <button>Cadastrar e guardar token</button>
+      <button>Cadastrar</button>
     </form>
   </dialog>
 
   <dialog id="loginDialog">
     <div class="dialog-head">
       <h2>Login</h2>
-      <button type="button" onclick="document.getElementById('loginDialog').close()">Fechar</button>
+      <button onclick="document.getElementById('loginDialog').close()">✕</button>
     </div>
     <form onsubmit="loginUser(event)">
-      <h3>POST /auth/login</h3>
       <label>Email <input name="email" value="empresa@test.com"></label>
       <label>Senha <input name="password" value="123456" type="password"></label>
-      <button>Login e guardar token</button>
+      <button>Login</button>
     </form>
   </dialog>
 
-  <section>
-    <h2>Auth</h2>
-    <div class="row">
-      <button type="button" onclick="document.getElementById('loginDialog').showModal()">Abrir login</button>
-      <button type="button" onclick="document.getElementById('registerDialog').showModal()">Abrir cadastro</button>
-      <button type="button" onclick="safeRun(authMe)">GET /auth/me</button>
-    </div>
-    <p class="mini">Use dialogs para trocar rapidamente entre contas cliente, empresa e motorista.</p>
-  </section>
-
-  <section>
-    <h2>Veiculos</h2>
-    <p class="mini">Empresa transportadora cadastra, edita e desativa camioes. Motorista apenas consulta o camiao atribuido e atualiza localizacao.</p>
-    <div class="row">
-      <button type="button" onclick="safeRun(() => api('/vehicles/me'))">GET /vehicles/me empresa/motorista</button>
-      <button type="button" onclick="safeRun(() => api('/vehicles'))">GET /vehicles disponiveis</button>
-      <button type="button" onclick="document.getElementById('vehicleDialog').showModal()">Cadastrar veiculo</button>
-    </div>
-  </section>
-
-  <section>
-    <h2>Cargas</h2>
-    <div class="row">
-      <button type="button" onclick="safeRun(() => api('/loads/types', { auth: false }))">GET /loads/types</button>
-      <button type="button" onclick="safeRun(() => api('/loads/fill-types', { auth: false }))">GET /loads/fill-types</button>
-      <button type="button" onclick="safeRun(() => api('/loads'))">GET /loads</button>
-      <button type="button" onclick="safeRun(() => api('/loads/me'))">GET /loads/me</button>
-      <button type="button" onclick="document.getElementById('loadDialog').showModal()">Publicar carga</button>
-    </div>
-  </section>
-
-  <section>
-    <h2>Propostas e negociacao</h2>
-    <div class="row">
-      <button type="button" onclick="safeRun(() => api('/proposals/me'))">GET /proposals/me</button>
-      <button type="button" onclick="safeRun(() => api('/proposals/received'))">GET /proposals/received</button>
-      <button type="button" onclick="document.getElementById('proposalDialog').showModal()">Enviar proposta</button>
-      <button type="button" onclick="document.getElementById('counterOfferDialog').showModal()">Contraproposta</button>
-      <button type="button" onclick="document.getElementById('proposalActionsDialog').showModal()">Acoes</button>
-    </div>
-  </section>
-
-  <section>
-    <h2>Request manual</h2>
-    <button type="button" onclick="document.getElementById('manualRequestDialog').showModal()">Abrir request manual</button>
-  </section>
-  </div>
-
-  <aside class="output-panel">
-    <div class="row" style="justify-content: space-between;">
-      <h2>Resultado</h2>
-      <button type="button" onclick="write({ message: 'Resultado limpo' })">Limpar output</button>
-    </div>
-    <pre id="result"></pre>
-  </aside>
-  </div>
-
-  <dialog id="vehicleDialog">
+  <!-- USERS DIALOGS -->
+  <dialog id="userUpdateDialog">
     <div class="dialog-head">
-      <h2>Cadastrar veiculo</h2>
-      <button type="button" onclick="document.getElementById('vehicleDialog').close()">Fechar</button>
+      <h2>Atualizar Utilizador</h2>
+      <button onclick="document.getElementById('userUpdateDialog').close()">✕</button>
+    </div>
+    <form onsubmit="updateUser(event)">
+      <label>Nome <input name="name" value=""></label>
+      <label>Telefone <input name="phone" value=""></label>
+      <button>Atualizar</button>
+    </form>
+  </dialog>
+
+  <dialog id="passwordChangeDialog">
+    <div class="dialog-head">
+      <h2>Alterar Senha</h2>
+      <button onclick="document.getElementById('passwordChangeDialog').close()">✕</button>
+    </div>
+    <form onsubmit="changePassword(event)">
+      <label>Senha Atual <input name="old_password" type="password"></label>
+      <label>Nova Senha <input name="new_password" type="password"></label>
+      <label>Confirmar <input name="confirm_password" type="password"></label>
+      <button>Alterar</button>
+    </form>
+  </dialog>
+
+  <!-- VEHICLES DIALOGS -->
+  <dialog id="vehicleCreateDialog">
+    <div class="dialog-head">
+      <h2>Criar Veiculo</h2>
+      <button onclick="document.getElementById('vehicleCreateDialog').close()">✕</button>
     </div>
     <form onsubmit="createVehicle(event)">
-      <h3>POST /vehicles empresa transportadora</h3>
       <div class="grid">
         <label>Matricula <input name="plate" value="ABC-123-MP"></label>
         <label>Motorista ID <input name="driver_id" type="number"></label>
         <label>Marca <input name="brand" value="Mercedes"></label>
         <label>Modelo <input name="model_name" value="Actros"></label>
         <label>Tipo <input name="vehicle_type" value="Camiao"></label>
-        <label>Capacidade <input name="tonnage_capacity" type="number" step="0.01" value="30"></label>
+        <label>Capacidade (ton) <input name="tonnage_capacity" type="number" step="0.1" value="30"></label>
         <label>Status <input name="status" value="disponivel"></label>
         <label>Lat <input name="current_lat" type="number" step="0.000001" value="-25.9692"></label>
         <label>Lng <input name="current_lng" type="number" step="0.000001" value="32.5732"></label>
-        <label>Foto <input name="photo" type="file"></label>
       </div>
-      <button>Cadastrar veiculo</button>
+      <button>Criar</button>
     </form>
   </dialog>
 
-  <dialog id="loadDialog">
+  <dialog id="vehicleUpdateDialog">
     <div class="dialog-head">
-      <h2>Publicar carga</h2>
-      <button type="button" onclick="document.getElementById('loadDialog').close()">Fechar</button>
+      <h2>Editar Veiculo</h2>
+      <button onclick="document.getElementById('vehicleUpdateDialog').close()">✕</button>
+    </div>
+    <form onsubmit="updateVehicle(event)">
+      <label>Vehicle ID <input id="vehicleId" name="vehicle_id" type="number" readonly></label>
+      <div class="grid">
+        <label>Marca <input name="brand" value=""></label>
+        <label>Modelo <input name="model_name" value=""></label>
+        <label>Status <input name="status" value=""></label>
+        <label>Capacidade (ton) <input name="tonnage_capacity" type="number" step="0.1"></label>
+      </div>
+      <button>Atualizar</button>
+    </form>
+  </dialog>
+
+  <dialog id="vehicleLocationDialog">
+    <div class="dialog-head">
+      <h2>Atualizar Localizacao</h2>
+      <button onclick="document.getElementById('vehicleLocationDialog').close()">✕</button>
+    </div>
+    <form onsubmit="updateVehicleLocation(event)">
+      <label>Vehicle ID <input id="vehicleLocId" name="vehicle_id" type="number"></label>
+      <label>Latitude <input name="current_lat" type="number" step="0.000001" value="-25.9692"></label>
+      <label>Longitude <input name="current_lng" type="number" step="0.000001" value="32.5732"></label>
+      <button>Atualizar</button>
+    </form>
+  </dialog>
+
+  <!-- LOADS DIALOGS -->
+  <dialog id="loadCreateDialog">
+    <div class="dialog-head">
+      <h2>Publicar Carga</h2>
+      <button onclick="document.getElementById('loadCreateDialog').close()">✕</button>
     </div>
     <form onsubmit="createLoad(event)">
-      <h3>POST /loads</h3>
       <div class="grid">
         <label>Tipo <input name="load_type" value="mercadoria_geral"></label>
         <label>Nome <input name="load_name" value="Carga teste"></label>
         <label>Origem <input name="origin" value="Maputo"></label>
         <label>Destino <input name="destination" value="Beira"></label>
-        <label>Peso <input name="weight" type="number" value="150"></label>
-        <label>Unidade <input name="weight_unit" value="ton"></label>
-        <label>Volume <input name="volume" type="number" value="25"></label>
+        <label>Peso (ton) <input name="weight" type="number" value="150"></label>
+        <label>Volume (m³) <input name="volume" type="number" value="25"></label>
         <label>Valor <input name="value" type="number" value="500000"></label>
-        <label>Negociavel
-          <select name="negotiable">
-            <option value="true">true</option>
-            <option value="false">false</option>
-          </select>
-        </label>
-        <label>Data saida <input name="departure_date" type="date" value="2026-06-15"></label>
-        <label>Tipo enchimento <input name="load_fill" value="completa"></label>
-        <label>Veiculo sugerido <input name="suggested_vehicle_type" value="Camiao"></label>
-        <label>Origem lat <input name="origin_lat" type="number" step="0.000001" value="-25.9692"></label>
-        <label>Origem lng <input name="origin_lng" type="number" step="0.000001" value="32.5732"></label>
-        <label>Destino lat <input name="destination_lat" type="number" step="0.000001" value="-19.8432"></label>
-        <label>Destino lng <input name="destination_lng" type="number" step="0.000001" value="34.8386"></label>
+        <label>Negociavel <select name="negotiable">
+          <option value="true">Sim</option>
+          <option value="false">Nao</option>
+        </select></label>
+        <label>Data Saida <input name="departure_date" type="date" value="2026-06-15"></label>
+        <label>Enchimento <input name="load_fill" value="completa"></label>
+        <label>Veiculo <input name="suggested_vehicle_type" value="Camiao"></label>
+        <label>Origem Lat <input name="origin_lat" type="number" step="0.000001" value="-25.9692"></label>
+        <label>Origem Lng <input name="origin_lng" type="number" step="0.000001" value="32.5732"></label>
+        <label>Destino Lat <input name="destination_lat" type="number" step="0.000001" value="-19.8432"></label>
+        <label>Destino Lng <input name="destination_lng" type="number" step="0.000001" value="34.8386"></label>
       </div>
       <label>Descricao <textarea name="description">Descricao de teste</textarea></label>
-      <label>Instrucoes <textarea name="instructions">Carga fragil - manusear com cuidado</textarea></label>
-      <label>Imagens <input name="images" type="file" multiple></label>
-      <button>Publicar carga</button>
+      <label>Instrucoes <textarea name="instructions">Carga fragil</textarea></label>
+      <button>Publicar</button>
     </form>
   </dialog>
 
-  <dialog id="proposalDialog">
+  <dialog id="loadUpdateDialog">
     <div class="dialog-head">
-      <h2>Enviar proposta</h2>
-      <button type="button" onclick="document.getElementById('proposalDialog').close()">Fechar</button>
+      <h2>Editar Carga</h2>
+      <button onclick="document.getElementById('loadUpdateDialog').close()">✕</button>
     </div>
-    <form onsubmit="sendProposal(event)">
-      <h3>POST /proposals/loads/{load_id}</h3>
+    <form onsubmit="updateLoad(event)">
+      <label>Load ID <input id="loadId" name="load_id" type="number" readonly></label>
+      <label>Status <input name="status" value=""></label>
+      <label>Valor <input name="value" type="number"></label>
+      <label>Descricao <textarea name="description"></textarea></label>
+      <button>Atualizar</button>
+    </form>
+  </dialog>
+
+  <!-- PROPOSALS DIALOGS -->
+  <dialog id="proposalCreateDialog">
+    <div class="dialog-head">
+      <h2>Enviar Proposta</h2>
+      <button onclick="document.getElementById('proposalCreateDialog').close()">✕</button>
+    </div>
+    <form onsubmit="createProposal(event)">
       <label>Load ID <input name="load_id" type="number"></label>
-      <label>Valor proposto <input name="proposed_value" type="number" step="0.01" value="28000"></label>
+      <label>Valor Proposto <input name="proposed_value" type="number" step="0.01" value="28000"></label>
       <label>Motorista ID <input name="driver_id" type="number"></label>
       <label>Veiculo ID <input name="vehicle_id" type="number"></label>
       <label>Mensagem <textarea name="message">Proposta inicial</textarea></label>
-      <button>Enviar proposta</button>
+      <button>Enviar</button>
     </form>
   </dialog>
 
-  <dialog id="counterOfferDialog">
+  <dialog id="negotiationDialog">
     <div class="dialog-head">
       <h2>Contraproposta</h2>
-      <button type="button" onclick="document.getElementById('counterOfferDialog').close()">Fechar</button>
+      <button onclick="document.getElementById('negotiationDialog').close()">✕</button>
     </div>
-    <form onsubmit="counterOffer(event)">
-      <h3>POST /proposals/{proposal_id}/negotiations</h3>
+    <form onsubmit="createNegotiation(event)">
       <label>Proposal ID <input name="proposal_id" type="number"></label>
       <label>Valor <input name="amount" type="number" step="0.01" value="26000"></label>
       <label>Mensagem <textarea name="message">Contraproposta</textarea></label>
-      <button>Criar contraproposta</button>
+      <button>Enviar</button>
     </form>
   </dialog>
 
-  <dialog id="proposalActionsDialog">
+  <!-- TRIPS DIALOGS -->
+  <dialog id="tripStartDialog">
     <div class="dialog-head">
-      <h2>Acoes de proposta</h2>
-      <button type="button" onclick="document.getElementById('proposalActionsDialog').close()">Fechar</button>
+      <h2>Iniciar Viagem</h2>
+      <button onclick="document.getElementById('tripStartDialog').close()">✕</button>
     </div>
-    <form onsubmit="proposalAction(event)">
-      <label>Proposal ID <input name="proposal_id" type="number"></label>
-      <label>Negotiation ID <input name="negotiation_id" type="number"></label>
-      <div class="row">
-        <button name="action" value="proposal-detail">Ver proposta</button>
-        <button name="action" value="proposal-accept">Aceitar proposta</button>
-        <button name="action" value="proposal-reject">Recusar proposta</button>
-        <button name="action" value="negotiations">Ver negociacoes</button>
-        <button name="action" value="negotiation-accept">Aceitar contraproposta</button>
-        <button name="action" value="negotiation-reject">Recusar contraproposta</button>
-      </div>
+    <form onsubmit="startTrip(event)">
+      <label>Trip ID <input id="tripId" name="trip_id" type="number"></label>
+      <label>Latitude <input name="current_lat" type="number" step="0.000001" value="-25.9692"></label>
+      <label>Longitude <input name="current_lng" type="number" step="0.000001" value="32.5732"></label>
+      <button>Iniciar</button>
     </form>
   </dialog>
 
-  <dialog id="manualRequestDialog">
-    <div class="dialog-head">
-      <h2>Request manual</h2>
-      <button type="button" onclick="document.getElementById('manualRequestDialog').close()">Fechar</button>
+  <!-- MAIN SECTIONS -->
+  <section>
+    <h2>Auth & Users</h2>
+    <div class="row-compact">
+      <button onclick="document.getElementById('loginDialog').showModal()">Login</button>
+      <button onclick="document.getElementById('registerDialog').showModal()">Cadastro</button>
+      <button onclick="safeRun(() => api('/auth/me'))">GET /auth/me</button>
+      <button onclick="safeRun(() => api('/auth/password', { method: 'PATCH' }))">Mudar Senha</button>
     </div>
+  </section>
+
+  <section>
+    <h2>Utilizadores</h2>
+    <div class="row-compact">
+      <button onclick="safeRun(() => api('/users/me/profile'))">GET /users/me/profile</button>
+      <button onclick="document.getElementById('userUpdateDialog').showModal()">PATCH /users/me</button>
+      <button onclick="safeRun(() => requestById('/users/', 'User ID'))">GET /users/{id}</button>
+    </div>
+  </section>
+
+  <section>
+    <h2>Clientes</h2>
+    <div class="row-compact">
+      <button onclick="safeRun(() => api('/clients/me'))">GET /clients/me</button>
+      <button onclick="document.getElementById('userUpdateDialog').showModal()">PATCH /clients/me</button>
+      <button onclick="safeRun(() => api('/clients'))">GET /clients</button>
+      <button onclick="safeRun(() => requestById('/clients/', 'Client ID'))">GET /clients/{id}</button>
+      <button onclick="safeRun(() => api('/clients/me/stats'))">GET /clients/me/stats</button>
+      <button onclick="safeRun(() => api('/clients/me/activities'))">GET /clients/me/activities</button>
+    </div>
+  </section>
+
+  <section>
+    <h2>Empresas</h2>
+    <div class="row-compact">
+      <button onclick="safeRun(() => api('/companies/me'))">GET /companies/me</button>
+      <button onclick="safeRun(() => api('/companies'))">GET /companies</button>
+      <button onclick="safeRun(() => requestById('/companies/', 'Company ID'))">GET /companies/{id}</button>
+      <button onclick="safeRun(() => api('/companies/me/drivers'))">GET /companies/me/drivers</button>
+      <button onclick="safeRun(() => api('/companies/me/proposals'))">GET /companies/me/proposals</button>
+      <button onclick="safeRun(() => api('/companies/me/trips'))">GET /companies/me/trips</button>
+    </div>
+  </section>
+
+  <section>
+    <h2>Veiculos</h2>
+    <div class="row-compact">
+      <button onclick="safeRun(() => api('/vehicles'))">GET /vehicles disponiveis</button>
+      <button onclick="safeRun(() => api('/vehicles/me'))">GET /vehicles/me</button>
+      <button onclick="safeRun(() => requestById('/vehicles/', 'Vehicle ID'))">GET /vehicles/{id}</button>
+      <button onclick="document.getElementById('vehicleCreateDialog').showModal()">POST /vehicles</button>
+      <button onclick="document.getElementById('vehicleUpdateDialog').showModal()">PATCH /vehicles/{id}</button>
+      <button onclick="document.getElementById('vehicleLocationDialog').showModal()">PATCH location</button>
+      <button onclick="safeRun(() => deleteById('/vehicles/', 'Vehicle ID'))">DELETE /vehicles/{id}</button>
+    </div>
+  </section>
+
+  <section>
+    <h2>Cargas</h2>
+    <div class="row-compact">
+      <button onclick="safeRun(() => api('/loads/types', { auth: false }))">GET /loads/types</button>
+      <button onclick="safeRun(() => api('/loads/fill-types', { auth: false }))">GET /loads/fill-types</button>
+      <button onclick="safeRun(() => api('/loads'))">GET /loads</button>
+      <button onclick="safeRun(() => api('/loads/me'))">GET /loads/me</button>
+      <button onclick="safeRun(() => requestById('/loads/', 'Load ID'))">GET /loads/{id}</button>
+      <button onclick="safeRun(() => requestById('/loads/', 'Load ID', '/tracking'))">GET /loads/{id}/tracking</button>
+      <button onclick="document.getElementById('loadCreateDialog').showModal()">POST /loads</button>
+      <button onclick="document.getElementById('loadUpdateDialog').showModal()">PATCH /loads/{id}</button>
+      <button onclick="safeRun(() => deleteById('/loads/', 'Load ID'))">DELETE /loads/{id}</button>
+    </div>
+  </section>
+
+  <section>
+    <h2>Propostas</h2>
+    <div class="row-compact">
+      <button onclick="safeRun(() => api('/proposals/me'))">GET /proposals/me</button>
+      <button onclick="safeRun(() => api('/proposals/received'))">GET /proposals/received</button>
+      <button onclick="safeRun(() => requestById('/proposals/', 'Proposal ID'))">GET /proposals/{id}</button>
+      <button onclick="safeRun(() => requestById('/proposals/', 'Proposal ID', '/negotiations'))">GET negotiations</button>
+      <button onclick="document.getElementById('proposalCreateDialog').showModal()">POST proposta</button>
+      <button onclick="document.getElementById('negotiationDialog').showModal()">POST negotiation</button>
+      <button onclick="safeRun(() => proposalAction('accept'))">POST accept</button>
+      <button onclick="safeRun(() => proposalAction('reject'))">POST reject</button>
+    </div>
+  </section>
+
+  <section>
+    <h2>Viagens</h2>
+    <div class="row-compact">
+      <button onclick="safeRun(() => api('/trips/me'))">GET /trips/me</button>
+      <button onclick="safeRun(() => requestById('/trips/', 'Trip ID'))">GET /trips/{id}</button>
+      <button onclick="document.getElementById('tripStartDialog').showModal()">PATCH /trips/start</button>
+      <button onclick="safeRun(() => requestById('/trips/', 'Trip ID', '/locations'))">GET locations</button>
+      <button onclick="safeRun(() => requestById('/driver-trips/', 'Trip ID'))">GET /driver-trips/{id}</button>
+      <button onclick="safeRun(() => api('/driver-trips'))">GET /driver-trips</button>
+      <button onclick="safeRun(() => api('/driver-trips/stops/types', { auth: false }))">GET stop types</button>
+    </div>
+  </section>
+
+  <section>
+    <h2>Documentos</h2>
+    <div class="row-compact">
+      <button onclick="safeRun(() => api('/documents/types', { auth: false }))">GET /documents/types</button>
+      <button onclick="safeRun(() => api('/documents/me'))">GET /documents/me</button>
+      <button onclick="safeRun(() => requestById('/documents/me/', 'Document ID'))">GET /documents/me/{id}</button>
+      <button onclick="safeRun(() => deleteById('/documents/me/', 'Document ID'))">DELETE /documents/me/{id}</button>
+    </div>
+  </section>
+
+  <section>
+    <h2>Mensagens</h2>
+    <div class="row-compact">
+      <button onclick="safeRun(() => api('/messages/summary'))">GET /messages/summary</button>
+      <button onclick="safeRun(() => api('/messages'))">GET /messages (conversas)</button>
+      <button onclick="safeRun(() => requestById('/messages/loads/', 'Load ID'))">GET /messages/loads/{id}</button>
+    </div>
+  </section>
+
+  <section>
+    <h2>Notificacoes</h2>
+    <div class="row-compact">
+      <button onclick="safeRun(() => api('/notifications'))">GET /notifications</button>
+      <button onclick="safeRun(() => api('/notifications/unread-count'))">GET unread-count</button>
+      <button onclick="safeRun(() => api('/notifications/read-all', { method: 'PATCH' }))">PATCH read-all</button>
+    </div>
+  </section>
+
+  <section>
+    <h2>Carteira</h2>
+    <div class="row-compact">
+      <button onclick="safeRun(() => api('/wallet'))">GET /wallet (saldo)</button>
+      <button onclick="safeRun(() => api('/wallet/transactions'))">GET /wallet/transactions</button>
+      <button onclick="safeRun(() => api('/wallet/deposits', { method: 'POST', json: { amount: 10000, phone: '' } }))">POST deposit</button>
+    </div>
+  </section>
+
+  <section>
+    <h2>Stats</h2>
+    <div class="row-compact">
+      <button onclick="safeRun(() => api('/stats/dashboard'))">GET /stats/dashboard</button>
+    </div>
+  </section>
+
+  <section>
+    <h2>Request Manual</h2>
     <form onsubmit="manualRequest(event)">
       <div class="grid">
-        <label>Metodo
-          <select name="method">
-            <option>GET</option>
-            <option>POST</option>
-            <option>PATCH</option>
-            <option>DELETE</option>
-          </select>
-        </label>
+        <label>Metodo <select name="method">
+          <option>GET</option>
+          <option>POST</option>
+          <option>PATCH</option>
+          <option>DELETE</option>
+        </select></label>
         <label>Path <input name="path" value="/auth/me"></label>
       </div>
       <label>JSON body <textarea name="body">{}</textarea></label>
       <button>Enviar</button>
     </form>
-  </dialog>
+  </section>
+
+  </div>
+
+  <aside class="output-panel">
+    <div class="row" style="justify-content: space-between;">
+      <h3 style="margin: 0;">Resultado</h3>
+      <button onclick="write({ message: 'Limpo' })" style="padding: 3px 6px; font-size: 11px;">Limpar</button>
+    </div>
+    <pre id="result"></pre>
+  </aside>
+  </div>
 </main>
 
 <script>
@@ -407,84 +552,57 @@ const result = document.getElementById("result");
 const tokenState = document.getElementById("tokenState");
 const statusMessage = document.getElementById("statusMessage");
 
-function getToken() {
-  return localStorage.getItem(tokenKey) || "";
-}
-
-function setToken(token) {
-  localStorage.setItem(tokenKey, token);
-  updateTokenState();
-  setStatus("Token guardado com sucesso");
-}
-
-function clearToken() {
-  localStorage.removeItem(tokenKey);
-  updateTokenState();
-  setStatus("Token removido");
-  write({ message: "Token removido" });
-}
-
+function getToken() { return localStorage.getItem(tokenKey) || ""; }
+function setToken(token) { localStorage.setItem(tokenKey, token); updateTokenState(); setStatus("Token guardado"); }
+function clearToken() { localStorage.removeItem(tokenKey); updateTokenState(); write({ message: "Token removido" }); }
 function updateTokenState() {
   const token = getToken();
-  tokenState.textContent = token ? "sim (" + token.slice(0, 18) + "...)" : "nao";
+  tokenState.textContent = token ? "sim (" + token.slice(0, 15) + "...)" : "nao";
 }
 
 function write(data) {
-  if (typeof data === "string") {
-    result.textContent = data;
-    return;
-  }
+  if (typeof data === "string") { result.textContent = data; return; }
   result.innerHTML = highlightJson(data);
 }
 
-function escapeHtml(value) {
-  return String(value)
-    .replaceAll("&", "&amp;")
-    .replaceAll("<", "&lt;")
-    .replaceAll(">", "&gt;");
+function escapeHtml(v) {
+  return String(v).replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;");
 }
 
 function highlightJson(data) {
   const json = escapeHtml(JSON.stringify(data, null, 2));
   return json.replace(
     /("(?:\\\\.|[^"\\\\])*")(\\s*:)?|\\b(true|false)\\b|\\b(null)\\b|-?\\d+(?:\\.\\d+)?(?:e[+-]?\\d+)?/gi,
-    (match, stringValue, colon, boolValue, nullValue) => {
-      if (stringValue && colon) return '<span class="json-key">' + stringValue + '</span>' + colon;
-      if (stringValue) return '<span class="json-string">' + stringValue + '</span>';
-      if (boolValue) return '<span class="json-bool">' + boolValue + '</span>';
-      if (nullValue) return '<span class="json-null">null</span>';
-      return '<span class="json-number">' + match + '</span>';
+    (m, s, c, b, n) => {
+      if (s && c) return '<span class="json-key">' + s + '</span>' + c;
+      if (s) return '<span class="json-string">' + s + '</span>';
+      if (b) return '<span class="json-bool">' + b + '</span>';
+      if (n) return '<span class="json-null">null</span>';
+      return '<span class="json-number">' + m + '</span>';
     }
   );
 }
 
-function setStatus(message) {
-  statusMessage.textContent = message;
-}
+function setStatus(msg) { statusMessage.textContent = msg; }
 
 async function safeRun(fn) {
-  try {
-    await fn();
-  } catch (error) {
-    setStatus(error.message || "Erro inesperado");
-    write({ error: error.message || String(error) });
+  try { await fn(); } catch (e) { 
+    setStatus(e.message); 
+    write({ error: e.message }); 
   }
 }
 
 function formObject(form) {
   const data = new FormData(form);
   const obj = {};
-  for (const [key, value] of data.entries()) {
-    if (value instanceof File) continue;
-    if (value === "") continue;
-    if (["proposed_value", "amount", "weight", "volume", "value", "origin_lat", "origin_lng", "destination_lat", "destination_lng", "tonnage_capacity", "current_lat", "current_lng"].includes(key)) {
-      obj[key] = Number(value);
-    } else if (["driver_id", "vehicle_id", "load_id", "proposal_id", "negotiation_id"].includes(key)) {
-      obj[key] = Number(value);
-    } else if (value === "true" || value === "false") {
-      obj[key] = value === "true";
+  for (const [k, v] of data.entries()) {
+    if (v === "" || (v instanceof File)) continue;
+    if (["proposed_value", "amount", "weight", "volume", "value", "origin_lat", "origin_lng", "destination_lat", "destination_lng", "tonnage_capacity", "current_lat", "current_lng", "load_id", "vehicle_id", "driver_id", "proposal_id", "negotiation_id", "trip_id"].includes(k)) {
+      obj[k] = Number(v);
+    } else if (v === "true" || v === "false") {
+      obj[k] = v === "true";
     } else {
-      obj[key] = value;
+      obj[k] = v;
     }
   }
   return obj;
@@ -493,136 +611,166 @@ function formObject(form) {
 async function api(path, options = {}) {
   const method = options.method || "GET";
   const headers = options.headers || {};
-  const useAuth = options.auth !== false;
-  setStatus("A enviar " + method + " " + path + "...");
-  if (useAuth && getToken()) headers.Authorization = "Bearer " + getToken();
-  if (options.json !== undefined) headers["Content-Type"] = "application/json";
+  setStatus("Enviando " + method + " " + path);
+  if (options.auth !== false && getToken()) headers.Authorization = "Bearer " + getToken();
+  if (options.json) headers["Content-Type"] = "application/json";
 
   const res = await fetch(path, {
     method,
     headers,
-    body: options.json !== undefined ? JSON.stringify(options.json) : options.body,
+    body: options.json ? JSON.stringify(options.json) : options.body,
   });
-  const contentType = res.headers.get("content-type") || "";
-  const body = contentType.includes("application/json") ? await res.json() : await res.text();
+  const ct = res.headers.get("content-type") || "";
+  const body = ct.includes("application/json") ? await res.json() : await res.text();
   write({ status: res.status, ok: res.ok, body });
   if (!res.ok) {
-    const detail = body && body.detail ? body.detail : "HTTP " + res.status;
+    const detail = body?.detail || "HTTP " + res.status;
     setStatus("Erro: " + detail);
-    return body;
+  } else {
+    setStatus("OK: " + method + " " + path);
   }
-  setStatus("Sucesso: " + method + " " + path);
   return body;
 }
 
-async function registerUser(event) {
-  event.preventDefault();
+async function registerUser(e) {
+  e.preventDefault();
   await safeRun(async () => {
-    const body = formObject(event.target);
+    const body = formObject(e.target);
     if (body.user_type !== "empresa") delete body.company_name;
     const data = await api("/auth/register", { method: "POST", json: body, auth: false });
     if (data.access_token) {
       setToken(data.access_token);
-      setStatus("Cadastro feito, token guardado");
       document.getElementById("registerDialog").close();
-      await api("/auth/me");
-      setStatus("Cadastro feito, token confirmado");
     }
   });
 }
 
-async function loginUser(event) {
-  event.preventDefault();
+async function loginUser(e) {
+  e.preventDefault();
   await safeRun(async () => {
-    const data = await api("/auth/login", { method: "POST", json: formObject(event.target), auth: false });
+    const data = await api("/auth/login", { method: "POST", json: formObject(e.target), auth: false });
     if (data.access_token) {
       setToken(data.access_token);
-      setStatus("Login feito, token guardado");
       document.getElementById("loginDialog").close();
-      await api("/auth/me");
-      setStatus("Login feito, token confirmado");
     }
   });
 }
 
-async function authMe() {
-  await api("/auth/me");
+async function authMe() { await api("/auth/me"); }
+
+async function updateUser(e) {
+  e.preventDefault();
+  const body = formObject(e.target);
+  await safeRun(() => api("/users/me", { method: "PATCH", json: body }));
 }
 
-async function createVehicle(event) {
-  event.preventDefault();
+async function changePassword(e) {
+  e.preventDefault();
+  const body = formObject(e.target);
+  await safeRun(() => api("/auth/password", { method: "PATCH", json: body }));
+}
+
+async function createVehicle(e) {
+  e.preventDefault();
   await safeRun(async () => {
-    const form = new FormData(event.target);
-    for (const [key, value] of [...form.entries()]) {
-      if (value === "" || (value instanceof File && !value.name)) form.delete(key);
+    const form = new FormData(e.target);
+    for (const [k, v] of [...form.entries()]) {
+      if (v === "" || (v instanceof File && !v.name)) form.delete(k);
     }
     await api("/vehicles", { method: "POST", body: form });
   });
 }
 
-async function createLoad(event) {
-  event.preventDefault();
-  await safeRun(async () => {
-    const form = new FormData(event.target);
-    for (const [key, value] of [...form.entries()]) {
-      if (value === "" || (value instanceof File && !value.name)) form.delete(key);
-    }
-    await api("/loads", { method: "POST", body: form });
-  });
+async function updateVehicle(e) {
+  e.preventDefault();
+  const body = formObject(e.target);
+  const vid = body.vehicle_id;
+  delete body.vehicle_id;
+  await safeRun(() => api("/vehicles/" + vid, { method: "PATCH", json: body }));
 }
 
-async function sendProposal(event) {
-  event.preventDefault();
-  await safeRun(async () => {
-    const data = formObject(event.target);
-    const loadId = data.load_id;
-    delete data.load_id;
-    await api("/proposals/loads/" + loadId, { method: "POST", json: data });
-  });
+async function updateVehicleLocation(e) {
+  e.preventDefault();
+  const body = formObject(e.target);
+  const vid = body.vehicle_id;
+  delete body.vehicle_id;
+  await safeRun(() => api("/vehicles/" + vid + "/location", { method: "PATCH", json: body }));
 }
 
-async function counterOffer(event) {
-  event.preventDefault();
-  await safeRun(async () => {
-    const data = formObject(event.target);
-    const proposalId = data.proposal_id;
-    delete data.proposal_id;
-    await api("/proposals/" + proposalId + "/negotiations", { method: "POST", json: data });
-  });
+async function createLoad(e) {
+  e.preventDefault();
+  const form = new FormData(e.target);
+  for (const [k, v] of [...form.entries()]) {
+    if (v === "" || (v instanceof File && !v.name)) form.delete(k);
+  }
+  await safeRun(() => api("/loads", { method: "POST", body: form }));
 }
 
-async function proposalAction(event) {
-  event.preventDefault();
-  await safeRun(async () => {
-    const action = event.submitter.value;
-    const data = formObject(event.target);
-    const proposalId = data.proposal_id;
-    const negotiationId = data.negotiation_id;
-    const map = {
-      "proposal-detail": ["GET", "/proposals/" + proposalId],
-      "proposal-accept": ["POST", "/proposals/" + proposalId + "/accept"],
-      "proposal-reject": ["POST", "/proposals/" + proposalId + "/reject"],
-      "negotiations": ["GET", "/proposals/" + proposalId + "/negotiations"],
-      "negotiation-accept": ["POST", "/proposals/" + proposalId + "/negotiations/" + negotiationId + "/accept"],
-      "negotiation-reject": ["POST", "/proposals/" + proposalId + "/negotiations/" + negotiationId + "/reject"],
-    };
-    const [method, path] = map[action];
-    await api(path, { method });
-  });
+async function updateLoad(e) {
+  e.preventDefault();
+  const body = formObject(e.target);
+  const lid = body.load_id;
+  delete body.load_id;
+  await safeRun(() => api("/loads/" + lid, { method: "PATCH", json: body }));
 }
 
-async function manualRequest(event) {
-  event.preventDefault();
-  await safeRun(async () => {
-    const form = event.target;
-    const method = form.elements.method.value;
-    const path = form.elements.path.value;
-    let body;
-    if (method !== "GET" && method !== "DELETE") {
-      body = JSON.parse(form.elements.body.value || "{}");
-    }
-    await api(path, { method, json: body });
-  });
+async function createProposal(e) {
+  e.preventDefault();
+  const body = formObject(e.target);
+  const lid = body.load_id;
+  delete body.load_id;
+  await safeRun(() => api("/proposals/loads/" + lid, { method: "POST", json: body }));
+}
+
+async function createNegotiation(e) {
+  e.preventDefault();
+  const body = formObject(e.target);
+  const pid = body.proposal_id;
+  delete body.proposal_id;
+  await safeRun(() => api("/proposals/" + pid + "/negotiations", { method: "POST", json: body }));
+}
+
+async function proposalAction(action) {
+  const pid = prompt("Proposal ID:");
+  if (!pid) return;
+  const map = {
+    accept: ["POST", "/proposals/" + pid + "/accept"],
+    reject: ["POST", "/proposals/" + pid + "/reject"],
+  };
+  const [method, path] = map[action];
+  await safeRun(() => api(path, { method }));
+}
+
+async function startTrip(e) {
+  e.preventDefault();
+  const body = formObject(e.target);
+  const tid = body.trip_id;
+  delete body.trip_id;
+  await safeRun(() => api("/trips/" + tid + "/start", { method: "PATCH", json: body }));
+}
+
+async function requestById(path, idLabel, suffix = "") {
+  const id = prompt(idLabel + ":");
+  if (!id) return;
+  return api(path + id + suffix);
+}
+
+async function deleteById(path, idLabel) {
+  const id = prompt(idLabel + ":");
+  if (!id || !confirm("Tem certeza?")) return;
+  return api(path + id, { method: "DELETE" });
+}
+
+async function manualRequest(e) {
+  e.preventDefault();
+  const f = e.target;
+  const method = f.elements.method.value;
+  const path = f.elements.path.value;
+  let body;
+  if (method !== "GET" && method !== "DELETE") {
+    body = JSON.parse(f.elements.body.value || "{}");
+  }
+  await safeRun(() => api(path, { method, json: body }));
 }
 
 updateTokenState();
