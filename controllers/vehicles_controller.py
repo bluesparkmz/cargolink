@@ -73,9 +73,14 @@ def list_my_vehicles(db: Session, user: User) -> list[Vehicle]:
     if user.user_type == "empresa":
         company = get_my_company(db, user)
         query = query.filter(Vehicle.company_id == company.id)
-    else:
+    elif user.user_type == "motorista":
         driver = get_my_driver(db, user)
         query = query.filter(Vehicle.driver_id == driver.id)
+    else:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Acesso permitido apenas para empresas transportadoras ou motoristas",
+        )
     return (
         query.filter(Vehicle.status != VEHICLE_STATUS_INACTIVE)
         .order_by(Vehicle.created_at.desc())

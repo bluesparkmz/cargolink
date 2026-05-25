@@ -213,12 +213,13 @@ def frontend_test():
 
   <section>
     <h2>Veiculos</h2>
+    <p class="mini">Empresa transportadora cadastra, edita e desativa camioes. Motorista apenas consulta o camiao atribuido e atualiza localizacao.</p>
     <div class="row">
-      <button type="button" onclick="safeRun(() => api('/vehicles/me'))">GET /vehicles/me</button>
-      <button type="button" onclick="safeRun(() => api('/vehicles'))">GET /vehicles</button>
+      <button type="button" onclick="safeRun(() => api('/vehicles/me'))">GET /vehicles/me empresa/motorista</button>
+      <button type="button" onclick="safeRun(() => api('/vehicles'))">GET /vehicles disponiveis</button>
     </div>
     <form onsubmit="createVehicle(event)">
-      <h3>POST /vehicles</h3>
+      <h3>POST /vehicles empresa transportadora</h3>
       <div class="grid">
         <label>Matricula <input name="plate" value="ABC-123-MP"></label>
         <label>Motorista ID <input name="driver_id" type="number"></label>
