@@ -42,6 +42,7 @@ def get_driver_trip(db: Session, driver: Driver, trip_id: int) -> Trip:
         db.query(Trip)
         .options(
             joinedload(Trip.load).joinedload(Load.client).joinedload(Client.user),
+            joinedload(Trip.vehicle),
             joinedload(Trip.stops),
         )
         .filter(Trip.id == trip_id, Trip.driver_id == driver.id)
@@ -60,6 +61,24 @@ def _calc_progress(trip: Trip) -> float | None:
         if total > 0:
             return min(round((traveled / total) * 100, 1), 100.0)
     return None
+
+
+def _sync_live_location(
+    trip: Trip,
+    driver: Driver,
+    latitude: Decimal,
+    longitude: Decimal,
+) -> None:
+    """Mantem a posicao atual sincronizada com o ultimo ponto GPS da viagem."""
+    now = datetime.now(timezone.utc)
+    driver.current_lat = latitude
+    driver.current_lng = longitude
+    driver.location_updated_at = now
+
+    if trip.vehicle is not None:
+        trip.vehicle.current_lat = latitude
+        trip.vehicle.current_lng = longitude
+        trip.vehicle.location_updated_at = now
 
 
 def build_trip_list_item(trip: Trip) -> dict:
@@ -176,10 +195,14 @@ def add_driver_location(
     if data.traveled_distance_km is not None:
         trip.traveled_distance_km = Decimal(str(data.traveled_distance_km))
 
+    latitude = Decimal(str(data.latitude))
+    longitude = Decimal(str(data.longitude))
+    _sync_live_location(trip, driver, latitude, longitude)
+
     location = TripLocation(
         trip_id=trip_id,
-        latitude=Decimal(str(data.latitude)),
-        longitude=Decimal(str(data.longitude)),
+        latitude=latitude,
+        longitude=longitude,
         speed=Decimal(str(data.speed)) if data.speed is not None else None,
     )
     db.add(location)

@@ -46,6 +46,24 @@ def _user_can_access_trip(db: Session, user: User, trip: Trip) -> None:
     raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Sem acesso a esta viagem")
 
 
+def _sync_live_location(
+    trip: Trip,
+    driver: Driver,
+    latitude: Decimal,
+    longitude: Decimal,
+) -> None:
+    """Mantem motorista e camiao da viagem na ultima posicao GPS recebida."""
+    now = datetime.now(timezone.utc)
+    driver.current_lat = latitude
+    driver.current_lng = longitude
+    driver.location_updated_at = now
+
+    if trip.vehicle is not None:
+        trip.vehicle.current_lat = latitude
+        trip.vehicle.current_lng = longitude
+        trip.vehicle.location_updated_at = now
+
+
 def list_my_trips(db: Session, user: User) -> list[Trip]:
     """Lista viagens do motorista ou do cliente."""
     if user.user_type == "motorista":
@@ -224,10 +242,14 @@ def add_trip_location(
     if data.traveled_distance_km is not None:
         trip.traveled_distance_km = Decimal(str(data.traveled_distance_km))
 
+    latitude = Decimal(str(data.latitude))
+    longitude = Decimal(str(data.longitude))
+    _sync_live_location(trip, driver, latitude, longitude)
+
     location = TripLocation(
         trip_id=trip_id,
-        latitude=Decimal(str(data.latitude)),
-        longitude=Decimal(str(data.longitude)),
+        latitude=latitude,
+        longitude=longitude,
         speed=Decimal(str(data.speed)) if data.speed is not None else None,
     )
     db.add(location)

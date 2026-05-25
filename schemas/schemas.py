@@ -681,8 +681,8 @@ class TripStartRequest(BaseModel):
 class TripLocationCreateRequest(BaseModel):
     """Ponto GPS durante a viagem."""
 
-    latitude: float
-    longitude: float
+    latitude: float = Field(..., ge=-90, le=90)
+    longitude: float = Field(..., ge=-180, le=180)
     speed: float | None = None
     traveled_distance_km: float | None = None
 

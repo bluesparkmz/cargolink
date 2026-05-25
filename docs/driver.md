@@ -482,6 +482,9 @@ Regras:
 - A viagem precisa estar com status `viagem_iniciada`.
 - Atualiza a distancia percorrida se `traveled_distance_km` for enviado.
 - Regista ponto GPS em `trip_locations`.
+- Tambem atualiza a localizacao atual do motorista.
+- Tambem atualiza a localizacao atual do camiao usado na viagem, quando existir.
+- No app, esta rota deve ser chamada automaticamente em intervalo curto enquanto a viagem estiver em curso.
 
 ### Listar historico GPS da viagem
 
