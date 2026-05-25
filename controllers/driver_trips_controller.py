@@ -198,6 +198,12 @@ def add_driver_location(
     latitude = Decimal(str(data.latitude))
     longitude = Decimal(str(data.longitude))
     _sync_live_location(trip, driver, latitude, longitude)
+    from controllers.trips_controller import _latest_trip_location, _should_store_trip_location
+
+    last_location = _latest_trip_location(db, trip_id)
+    if not _should_store_trip_location(last_location, latitude, longitude):
+        db.commit()
+        return last_location
 
     location = TripLocation(
         trip_id=trip_id,

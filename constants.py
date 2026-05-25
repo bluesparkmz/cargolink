@@ -42,6 +42,11 @@ TRIP_STATUS_STARTED = "viagem_iniciada"
 TRIP_STATUS_WAITING_CLIENT = "aguardando_cliente"
 TRIP_STATUS_COMPLETED = "concluida"
 
+# GPS da viagem: controla quantos pontos entram no historico da rota.
+TRIP_LOCATION_MIN_INTERVAL_SECONDS = 10
+TRIP_LOCATION_MIN_DISTANCE_METERS = 50
+TRIP_LOCATION_HEARTBEAT_SECONDS = 120
+
 # Filtros do app motorista (Minhas Viagens)
 TRIP_GROUP_IN_PROGRESS = "em_andamento"
 TRIP_GROUP_COMPLETED = "concluidas"

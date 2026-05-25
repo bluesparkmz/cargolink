@@ -485,6 +485,9 @@ Regras:
 - Tambem atualiza a localizacao atual do motorista.
 - Tambem atualiza a localizacao atual do camiao usado na viagem, quando existir.
 - No app, esta rota deve ser chamada automaticamente em intervalo curto enquanto a viagem estiver em curso.
+- Para nao sobrecarregar o banco, o historico da rota so guarda um novo ponto quando passou pelo menos 10 segundos e o motorista andou pelo menos 50 metros.
+- Se o motorista ficar parado, o historico guarda apenas um ponto de confirmacao a cada 120 segundos.
+- Mesmo quando o ponto nao entra no historico, a localizacao atual do motorista/camiao continua sendo atualizada.
 
 ### Listar historico GPS da viagem
 

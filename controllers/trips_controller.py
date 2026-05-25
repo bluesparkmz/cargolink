@@ -4,11 +4,15 @@ Controller de viagens: estados e localização GPS.
 
 from datetime import datetime, timezone
 from decimal import Decimal
+from math import atan2, cos, radians, sin, sqrt
 
 from fastapi import HTTPException, status
 from sqlalchemy.orm import Session, joinedload
 
 from constants import (
+    TRIP_LOCATION_HEARTBEAT_SECONDS,
+    TRIP_LOCATION_MIN_DISTANCE_METERS,
+    TRIP_LOCATION_MIN_INTERVAL_SECONDS,
     TRIP_STATUS_COMPLETED,
     TRIP_STATUS_STARTED,
     TRIP_STATUS_WAITING,
@@ -62,6 +66,64 @@ def _sync_live_location(
         trip.vehicle.current_lat = latitude
         trip.vehicle.current_lng = longitude
         trip.vehicle.location_updated_at = now
+
+
+def _distance_meters(
+    lat1: Decimal,
+    lng1: Decimal,
+    lat2: Decimal,
+    lng2: Decimal,
+) -> float:
+    """Calcula distancia aproximada entre dois pontos GPS."""
+    earth_radius_m = 6371000
+    phi1 = radians(float(lat1))
+    phi2 = radians(float(lat2))
+    delta_phi = radians(float(lat2 - lat1))
+    delta_lambda = radians(float(lng2 - lng1))
+    a = sin(delta_phi / 2) ** 2 + cos(phi1) * cos(phi2) * sin(delta_lambda / 2) ** 2
+    return earth_radius_m * 2 * atan2(sqrt(a), sqrt(1 - a))
+
+
+def _seconds_since(created_at: datetime | None) -> float | None:
+    if created_at is None:
+        return None
+    now = datetime.now(timezone.utc)
+    if created_at.tzinfo is None:
+        return (now.replace(tzinfo=None) - created_at).total_seconds()
+    return (now - created_at).total_seconds()
+
+
+def _latest_trip_location(db: Session, trip_id: int) -> TripLocation | None:
+    return (
+        db.query(TripLocation)
+        .filter(TripLocation.trip_id == trip_id)
+        .order_by(TripLocation.created_at.desc())
+        .first()
+    )
+
+
+def _should_store_trip_location(
+    last_location: TripLocation | None,
+    latitude: Decimal,
+    longitude: Decimal,
+) -> bool:
+    if last_location is None:
+        return True
+
+    elapsed_seconds = _seconds_since(last_location.created_at)
+    if elapsed_seconds is not None and elapsed_seconds >= TRIP_LOCATION_HEARTBEAT_SECONDS:
+        return True
+
+    if elapsed_seconds is not None and elapsed_seconds < TRIP_LOCATION_MIN_INTERVAL_SECONDS:
+        return False
+
+    distance = _distance_meters(
+        last_location.latitude,
+        last_location.longitude,
+        latitude,
+        longitude,
+    )
+    return distance >= TRIP_LOCATION_MIN_DISTANCE_METERS
 
 
 def list_my_trips(db: Session, user: User) -> list[Trip]:
@@ -245,6 +307,10 @@ def add_trip_location(
     latitude = Decimal(str(data.latitude))
     longitude = Decimal(str(data.longitude))
     _sync_live_location(trip, driver, latitude, longitude)
+    last_location = _latest_trip_location(db, trip_id)
+    if not _should_store_trip_location(last_location, latitude, longitude):
+        db.commit()
+        return last_location
 
     location = TripLocation(
         trip_id=trip_id,
