@@ -18,35 +18,157 @@ def frontend_test():
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>CargoLink API Test</title>
   <style>
-    body { font-family: Arial, sans-serif; margin: 20px; }
-    main { max-width: 1100px; margin: 0 auto; }
-    section { border: 1px solid #999; padding: 12px; margin: 12px 0; }
-    form { display: grid; gap: 8px; margin: 8px 0; }
-    label { display: grid; gap: 4px; }
-    input, select, textarea, button { font: inherit; padding: 6px; }
-    textarea { min-height: 90px; }
-    .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 8px; }
-    .row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
-    pre { border: 1px solid #999; padding: 12px; overflow: auto; min-height: 120px; }
+    :root {
+      color-scheme: dark;
+      --bg: #0b1020;
+      --panel: #111827;
+      --panel-2: #0f172a;
+      --line: #263244;
+      --text: #e5e7eb;
+      --muted: #9ca3af;
+      --field: #050816;
+      --accent: #38bdf8;
+      --ok: #86efac;
+      --err: #fca5a5;
+      --warn: #fde68a;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--text);
+      font-family: Arial, sans-serif;
+      font-size: 14px;
+    }
+    main { padding: 10px; }
+    h1 { font-size: 18px; margin: 0; }
+    h2 { font-size: 15px; margin: 0 0 8px; }
+    h3 { font-size: 13px; margin: 0 0 6px; color: var(--accent); }
+    a { color: var(--accent); }
+    .topbar {
+      position: sticky;
+      top: 0;
+      z-index: 2;
+      display: flex;
+      gap: 10px;
+      align-items: center;
+      justify-content: space-between;
+      padding: 10px;
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      margin-bottom: 10px;
+    }
+    .top-meta { display: flex; gap: 12px; flex-wrap: wrap; align-items: center; color: var(--muted); }
+    .shell {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) minmax(360px, 42vw);
+      gap: 10px;
+      align-items: start;
+    }
+    .controls { display: grid; gap: 10px; }
+    section, .output-panel {
+      border: 1px solid var(--line);
+      background: var(--panel);
+      border-radius: 8px;
+      padding: 10px;
+    }
+    .output-panel {
+      position: sticky;
+      top: 78px;
+      max-height: calc(100vh - 88px);
+      display: grid;
+      grid-template-rows: auto minmax(0, 1fr);
+    }
+    form { display: grid; gap: 6px; margin: 0; }
+    label { display: grid; gap: 3px; color: var(--muted); font-size: 12px; }
+    input, select, textarea, button {
+      width: 100%;
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      background: var(--field);
+      color: var(--text);
+      font: inherit;
+      padding: 7px 8px;
+    }
+    textarea { min-height: 58px; resize: vertical; }
+    button {
+      cursor: pointer;
+      background: #182235;
+      font-weight: 700;
+    }
+    button:hover { border-color: var(--accent); }
+    .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(155px, 1fr)); gap: 6px; }
+    .cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 8px; }
+    .row { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
+    .row button { width: auto; }
+    .mini { color: var(--muted); font-size: 12px; }
+    code { color: var(--warn); }
+    pre {
+      margin: 0;
+      overflow: auto;
+      min-height: 240px;
+      max-height: 100%;
+      padding: 10px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--panel-2);
+      color: var(--text);
+      font-size: 12px;
+      line-height: 1.45;
+    }
+    dialog {
+      width: min(720px, calc(100vw - 24px));
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      background: var(--panel);
+      color: var(--text);
+      padding: 12px;
+    }
+    dialog::backdrop { background: rgb(0 0 0 / 0.65); }
+    .dialog-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
+    .dialog-head button { width: auto; }
+    .json-key { color: #7dd3fc; }
+    .json-string { color: #86efac; }
+    .json-number { color: #fde68a; }
+    .json-bool { color: #f0abfc; }
+    .json-null { color: #fca5a5; }
+    @media (max-width: 980px) {
+      .shell { grid-template-columns: 1fr; }
+      .output-panel { position: static; max-height: none; }
+      pre { max-height: 55vh; }
+    }
   </style>
 </head>
 <body>
 <main>
-  <h1>CargoLink API Test</h1>
-  <p>Token guardado: <code id="tokenState">nao</code></p>
-  <p>Estado: <strong id="statusMessage">Pronto</strong></p>
-  <div class="row">
-    <button type="button" onclick="safeRun(authMe)">GET /auth/me</button>
-    <button type="button" onclick="clearToken()">Limpar token</button>
-    <a href="/docs">OpenAPI</a>
-    <a href="/documentation/proposals">Docs propostas</a>
-  </div>
+  <header class="topbar">
+    <div>
+      <h1>CargoLink API Test</h1>
+      <div class="mini">Estado: <strong id="statusMessage">Pronto</strong></div>
+    </div>
+    <div class="top-meta">
+      <span>Token: <code id="tokenState">nao</code></span>
+      <button type="button" onclick="document.getElementById('loginDialog').showModal()">Login</button>
+      <button type="button" onclick="document.getElementById('registerDialog').showModal()">Cadastro</button>
+      <button type="button" onclick="safeRun(authMe)">/auth/me</button>
+      <button type="button" onclick="clearToken()">Limpar</button>
+      <a href="/docs">OpenAPI</a>
+      <a href="/documentation/proposals">Docs propostas</a>
+    </div>
+  </header>
 
-  <section>
-    <h2>Auth</h2>
-    <div class="grid">
-      <form onsubmit="registerUser(event)">
-        <h3>POST /auth/register</h3>
+  <div class="shell">
+  <div class="controls">
+
+  <dialog id="registerDialog">
+    <div class="dialog-head">
+      <h2>Cadastro</h2>
+      <button type="button" onclick="document.getElementById('registerDialog').close()">Fechar</button>
+    </div>
+    <form onsubmit="registerUser(event)">
+      <h3>POST /auth/register</h3>
+      <div class="grid">
         <label>Nome <input name="name" value="Empresa Teste"></label>
         <label>Email <input name="email" value="empresa@test.com"></label>
         <label>Senha <input name="password" value="123456" type="password"></label>
@@ -61,16 +183,32 @@ def frontend_test():
         <label>Nome empresa <input name="company_name" value="Empresa Teste Lda"></label>
         <label>Cidade <input name="city" value="Maputo"></label>
         <label>Provincia <input name="state" value="Maputo"></label>
-        <button>Cadastrar e guardar token</button>
-      </form>
+      </div>
+      <button>Cadastrar e guardar token</button>
+    </form>
+  </dialog>
 
-      <form onsubmit="loginUser(event)">
-        <h3>POST /auth/login</h3>
-        <label>Email <input name="email" value="empresa@test.com"></label>
-        <label>Senha <input name="password" value="123456" type="password"></label>
-        <button>Login e guardar token</button>
-      </form>
+  <dialog id="loginDialog">
+    <div class="dialog-head">
+      <h2>Login</h2>
+      <button type="button" onclick="document.getElementById('loginDialog').close()">Fechar</button>
     </div>
+    <form onsubmit="loginUser(event)">
+      <h3>POST /auth/login</h3>
+      <label>Email <input name="email" value="empresa@test.com"></label>
+      <label>Senha <input name="password" value="123456" type="password"></label>
+      <button>Login e guardar token</button>
+    </form>
+  </dialog>
+
+  <section>
+    <h2>Auth</h2>
+    <div class="row">
+      <button type="button" onclick="document.getElementById('loginDialog').showModal()">Abrir login</button>
+      <button type="button" onclick="document.getElementById('registerDialog').showModal()">Abrir cadastro</button>
+      <button type="button" onclick="safeRun(authMe)">GET /auth/me</button>
+    </div>
+    <p class="mini">Use dialogs para trocar rapidamente entre contas cliente, empresa e motorista.</p>
   </section>
 
   <section>
@@ -196,11 +334,16 @@ def frontend_test():
       <button>Enviar</button>
     </form>
   </section>
+  </div>
 
-  <section>
-    <h2>Resultado</h2>
+  <aside class="output-panel">
+    <div class="row" style="justify-content: space-between;">
+      <h2>Resultado</h2>
+      <button type="button" onclick="write({ message: 'Resultado limpo' })">Limpar output</button>
+    </div>
     <pre id="result"></pre>
-  </section>
+  </aside>
+  </div>
 </main>
 
 <script>
@@ -232,7 +375,32 @@ function updateTokenState() {
 }
 
 function write(data) {
-  result.textContent = typeof data === "string" ? data : JSON.stringify(data, null, 2);
+  if (typeof data === "string") {
+    result.textContent = data;
+    return;
+  }
+  result.innerHTML = highlightJson(data);
+}
+
+function escapeHtml(value) {
+  return String(value)
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;");
+}
+
+function highlightJson(data) {
+  const json = escapeHtml(JSON.stringify(data, null, 2));
+  return json.replace(
+    /("(?:\\\\.|[^"\\\\])*")(\\s*:)?|\\b(true|false)\\b|\\b(null)\\b|-?\\d+(?:\\.\\d+)?(?:e[+-]?\\d+)?/gi,
+    (match, stringValue, colon, boolValue, nullValue) => {
+      if (stringValue && colon) return '<span class="json-key">' + stringValue + '</span>' + colon;
+      if (stringValue) return '<span class="json-string">' + stringValue + '</span>';
+      if (boolValue) return '<span class="json-bool">' + boolValue + '</span>';
+      if (nullValue) return '<span class="json-null">null</span>';
+      return '<span class="json-number">' + match + '</span>';
+    }
+  );
 }
 
 function setStatus(message) {
@@ -301,6 +469,7 @@ async function registerUser(event) {
     if (data.access_token) {
       setToken(data.access_token);
       setStatus("Cadastro feito, token guardado");
+      document.getElementById("registerDialog").close();
       await api("/auth/me");
     }
   });
@@ -313,6 +482,7 @@ async function loginUser(event) {
     if (data.access_token) {
       setToken(data.access_token);
       setStatus("Login feito, token guardado");
+      document.getElementById("loginDialog").close();
       await api("/auth/me");
     }
   });
@@ -388,11 +558,11 @@ async function manualRequest(event) {
   event.preventDefault();
   await safeRun(async () => {
     const form = event.target;
-    const method = form.method.value;
-    const path = form.path.value;
+    const method = form.elements.method.value;
+    const path = form.elements.path.value;
     let body;
     if (method !== "GET" && method !== "DELETE") {
-      body = JSON.parse(form.body.value || "{}");
+      body = JSON.parse(form.elements.body.value || "{}");
     }
     await api(path, { method, json: body });
   });
