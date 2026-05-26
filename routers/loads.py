@@ -26,7 +26,7 @@ from controllers.loads_controller import (
 )
 from deps import get_current_user
 from database import get_db
-from models.models import User
+from models.models import Load, User
 from schemas.schemas import (
     LoadCreateRequest,
     LoadCreateRequestForm,
@@ -44,6 +44,29 @@ from schemas.schemas import (
 )
 
 router = APIRouter()
+
+
+def _to_list_item(load: Load) -> LoadListItem:
+    """Monta resposta resumida com dados da carga."""
+    return LoadListItem(
+        id=load.id,
+        code=load.code,
+        load_type=load.load_type,
+        load_name=load.load_name,
+        origin=load.origin,
+        destination=load.destination,
+        origin_lat=load.origin_lat,
+        origin_lng=load.origin_lng,
+        destination_lat=load.destination_lat,
+        destination_lng=load.destination_lng,
+        weight=load.weight,
+        weight_unit=load.weight_unit,
+        value=load.value,
+        negotiable=load.negotiable,
+        status=load.status,
+        departure_date=load.departure_date,
+        created_at=load.created_at,
+    )
 
 
 @router.get("/types", response_model=list[LoadTypeItem])
