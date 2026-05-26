@@ -338,12 +338,38 @@ def frontend_test():
     <form onsubmit="updateVehicle(event)">
       <label>Vehicle ID <input id="vehicleId" name="vehicle_id" type="number" readonly></label>
       <div class="grid">
+        <label>Motorista ID <input name="driver_id" type="number" placeholder="vazio = nao alterar"></label>
         <label>Marca <input name="brand" value=""></label>
         <label>Modelo <input name="model_name" value=""></label>
         <label>Status <input name="status" value=""></label>
         <label>Capacidade (ton) <input name="tonnage_capacity" type="number" step="0.1"></label>
       </div>
       <button>Atualizar</button>
+    </form>
+  </dialog>
+
+  <dialog id="companyAttachDriverDialog">
+    <div class="dialog-head">
+      <h2>Associar Motorista a Empresa</h2>
+      <button onclick="document.getElementById('companyAttachDriverDialog').close()">✕</button>
+    </div>
+    <form onsubmit="attachCompanyDriver(event)">
+      <p class="mini">Motorista deve existir (conta tipo motorista) e nao pertencer a outra empresa. Use GET /drivers para ver IDs.</p>
+      <label>Motorista ID <input name="driver_id" type="number" required></label>
+      <button>Associar</button>
+    </form>
+  </dialog>
+
+  <dialog id="vehicleAssignDriverDialog">
+    <div class="dialog-head">
+      <h2>Atribuir Motorista ao Camiao</h2>
+      <button onclick="document.getElementById('vehicleAssignDriverDialog').close()">✕</button>
+    </div>
+    <form onsubmit="assignVehicleDriver(event)">
+      <p class="mini">Motorista deve pertencer a sua empresa (POST /companies/me/drivers antes). Camiao deve ser da empresa (GET /vehicles/me).</p>
+      <label>Vehicle ID <input name="vehicle_id" type="number" required></label>
+      <label>Motorista ID <input name="driver_id" type="number" required></label>
+      <button>Atribuir</button>
     </form>
   </dialog>
 
@@ -550,11 +576,14 @@ def frontend_test():
 
   <section>
     <h2>Empresas</h2>
+    <p class="mini">Logado como empresa: associar motorista e depois atribuir camiao na secao Veiculos.</p>
     <div class="row-compact">
       <button onclick="safeRun(() => api('/companies/me'))">GET /companies/me</button>
       <button onclick="safeRun(() => api('/companies'))">GET /companies</button>
       <button onclick="safeRun(() => requestById('/companies/', 'Company ID'))">GET /companies/{id}</button>
       <button onclick="safeRun(() => api('/companies/me/drivers'))">GET /companies/me/drivers</button>
+      <button onclick="document.getElementById('companyAttachDriverDialog').showModal()">POST /companies/me/drivers</button>
+      <button onclick="safeRun(detachCompanyDriver)">DELETE /companies/me/drivers/{id}</button>
       <button onclick="safeRun(() => api('/companies/me/proposals'))">GET /companies/me/proposals</button>
       <button onclick="safeRun(() => api('/companies/me/trips'))">GET /companies/me/trips</button>
     </div>
@@ -575,11 +604,13 @@ def frontend_test():
 
   <section>
     <h2>Veiculos</h2>
+    <p class="mini">Cadastro: POST /vehicles com driver_id opcional. Camiao ja criado: PATCH motorista (motorista deve estar na empresa).</p>
     <div class="row-compact">
       <button onclick="safeRun(() => api('/vehicles'))">GET /vehicles disponiveis</button>
       <button onclick="safeRun(() => api('/vehicles/me'))">GET /vehicles/me</button>
       <button onclick="safeRun(() => requestById('/vehicles/', 'Vehicle ID'))">GET /vehicles/{id}</button>
       <button onclick="document.getElementById('vehicleCreateDialog').showModal()">POST /vehicles</button>
+      <button onclick="document.getElementById('vehicleAssignDriverDialog').showModal()">PATCH /vehicles/{id} motorista</button>
       <button onclick="document.getElementById('vehicleUpdateDialog').showModal()">PATCH /vehicles/{id}</button>
       <button onclick="document.getElementById('vehicleLocationDialog').showModal()">PATCH location</button>
       <button onclick="safeRun(() => deleteById('/vehicles/', 'Vehicle ID'))">DELETE /vehicles/{id}</button>
@@ -851,6 +882,33 @@ async function updateVehicleLocation(e) {
   const vid = body.vehicle_id;
   delete body.vehicle_id;
   await safeRun(() => api("/vehicles/" + vid + "/location", { method: "PATCH", json: body }));
+}
+
+async function attachCompanyDriver(e) {
+  e.preventDefault();
+  await safeRun(async () => {
+    const body = formObject(e.target);
+    await api("/companies/me/drivers", { method: "POST", json: body });
+    document.getElementById("companyAttachDriverDialog").close();
+  });
+}
+
+async function detachCompanyDriver() {
+  const id = prompt("Driver ID a remover da empresa:");
+  if (!id) return;
+  if (!confirm("Remover motorista da empresa? Camioes atribuidos ficam sem motorista.")) return;
+  await api("/companies/me/drivers/" + id, { method: "DELETE" });
+  write({ message: "Motorista removido da empresa" });
+}
+
+async function assignVehicleDriver(e) {
+  e.preventDefault();
+  await safeRun(async () => {
+    const body = formObject(e.target);
+    const vid = body.vehicle_id;
+    await api("/vehicles/" + vid, { method: "PATCH", json: { driver_id: body.driver_id } });
+    document.getElementById("vehicleAssignDriverDialog").close();
+  });
 }
 
 async function createLoad(e) {
