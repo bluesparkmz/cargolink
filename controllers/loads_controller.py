@@ -15,6 +15,8 @@ from sqlalchemy.orm import Session, joinedload
 
 from config import settings
 from constants import (
+    BLOCKED_CONTENT_TYPES,
+    BLOCKED_FILE_EXTENSIONS,
     LOAD_FILL_IDS,
     LOAD_FILL_LABELS,
     LOAD_STATUS_ACCEPTED,
@@ -64,6 +66,27 @@ ALLOWED_LOAD_IMAGE_TYPES = {"image/jpeg": ".jpg", "image/png": ".png"}
 LOAD_UPLOAD_DIR = "uploads/loads"
 
 
+def _validate_upload_file_security(file: UploadFile, allowed_types: dict) -> None:
+    """Valida segurança do ficheiro: bloqueia tipos executáveis e perigosos."""
+    # Verificar MIME type bloqueado
+    content_type = (file.content_type or "").lower()
+    if content_type in BLOCKED_CONTENT_TYPES:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Tipo de ficheiro não permitido: {content_type}",
+        )
+    
+    # Verificar extensão bloqueada
+    if file.filename:
+        filename_lower = file.filename.lower()
+        for ext in BLOCKED_FILE_EXTENSIONS:
+            if filename_lower.endswith(ext):
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=f"Extensão de ficheiro não permitida: {ext}",
+                )
+
+
 def _generate_load_code() -> str:
     """Gera código único para a carga."""
     return f"CL-{uuid.uuid4().hex[:8].upper()}"
@@ -71,6 +94,9 @@ def _generate_load_code() -> str:
 
 def _save_load_image(file: UploadFile) -> str:
     """Guarda imagem da carga no volume persistente e devolve URL pública."""
+    # Validar segurança do ficheiro
+    _validate_upload_file_security(file, ALLOWED_LOAD_IMAGE_TYPES)
+    
     extension = ALLOWED_LOAD_IMAGE_TYPES.get(file.content_type or "")
     if not extension:
         raise HTTPException(

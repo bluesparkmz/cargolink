@@ -131,3 +131,51 @@ DOCUMENT_TYPE_IDS = {item["id"] for item in DOCUMENT_TYPES}
 DOCUMENT_STATUS_PENDING = "pendente"
 DOCUMENT_STATUS_APPROVED = "aprovado"
 DOCUMENT_STATUS_REJECTED = "rejeitado"
+
+# Segurança de uploads: extensões e MIME types bloqueados
+BLOCKED_FILE_EXTENSIONS = {
+    # Linguagens de programação e scripting
+    ".py", ".js", ".ts", ".jsx", ".tsx", ".php", ".php3", ".php4", ".php5", ".php6", ".php7", ".php8",
+    ".phtml", ".phar", ".pl", ".rb", ".go", ".rs", ".c", ".cpp", ".java", ".cs", ".vb",
+    ".sh", ".bash", ".zsh", ".ksh", ".csh", ".bat", ".cmd", ".com", ".exe", ".scr",
+    # Web e documento executável
+    ".html", ".htm", ".xml", ".svg", ".css", ".less", ".scss", ".sass",
+    # Ficheiros de desenvolvimento
+    ".asp", ".aspx", ".jsp", ".jspx", ".cgi", ".fcgi", ".wsgi",
+    # Ficheiros de sistema
+    ".dll", ".so", ".dylib", ".class", ".jar",
+    # Scripts de dados
+    ".json", ".yaml", ".yml", ".toml", ".ini", ".conf", ".config",
+    # Executáveis comprimidos
+    ".zip", ".tar", ".gz", ".rar", ".7z", ".bz2",
+}
+
+BLOCKED_CONTENT_TYPES = {
+    # Executáveis
+    "application/x-msdownload",
+    "application/x-msdos-program",
+    "application/x-executable",
+    "application/x-elf",
+    "application/x-object",
+    "application/x-sharedlib",
+    "application/x-shellscript",
+    "application/x-perl",
+    "application/x-python",
+    # Web/Script
+    "text/html",
+    "application/xhtml+xml",
+    "text/javascript",
+    "application/javascript",
+    "application/x-javascript",
+    "text/css",
+    "image/svg+xml",
+    "application/xml",
+    "text/xml",
+    "application/x-php",
+    # Arquivo
+    "application/zip",
+    "application/x-tar",
+    "application/gzip",
+    "application/x-rar-compressed",
+    "application/x-7z-compressed",
+}
