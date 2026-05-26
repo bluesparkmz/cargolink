@@ -66,7 +66,6 @@ app.mount(
 )
 
 # Cada router é registado aqui, um ficheiro por domínio
-app.include_router(admin_router, prefix="/admin", tags=["Admin"])
 app.include_router(auth_router, prefix="/auth", tags=["Auth"])
 app.include_router(users_router, prefix="/users", tags=["Users"])
 app.include_router(clients_router, prefix="/clients", tags=["Clients"])
@@ -86,6 +85,7 @@ app.include_router(wallet_router, prefix="/wallet", tags=["Wallet"])
 app.include_router(notifications_router, prefix="/notifications", tags=["Notifications"])
 app.include_router(messages_router, prefix="/messages", tags=["Messages"])
 app.include_router(websocket_router, tags=["Realtime"])
+app.include_router(admin_router, prefix="/admin", tags=["Admin"])
 
 
 def custom_openapi():
