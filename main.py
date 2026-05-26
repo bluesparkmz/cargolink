@@ -13,6 +13,7 @@ from fastapi.staticfiles import StaticFiles
 from config import settings
 from database import Base, engine
 from routers.auth import router as auth_router
+from routers.admin import router as admin_router
 from routers.clients import router as clients_router
 from routers.companies import router as companies_router
 from routers.documents import router as documents_router
@@ -65,6 +66,7 @@ app.mount(
 )
 
 # Cada router é registado aqui, um ficheiro por domínio
+app.include_router(admin_router, prefix="/admin", tags=["Admin"])
 app.include_router(auth_router, prefix="/auth", tags=["Auth"])
 app.include_router(users_router, prefix="/users", tags=["Users"])
 app.include_router(clients_router, prefix="/clients", tags=["Clients"])
