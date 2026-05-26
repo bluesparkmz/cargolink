@@ -13,6 +13,7 @@ from sqlalchemy.orm import Session, joinedload
 
 from config import settings
 from constants import VEHICLE_STATUSES, VEHICLE_STATUS_INACTIVE
+from controllers.companies_controller import get_company_driver_by_email
 from controllers.drivers_controller import get_my_driver
 from models.models import Company, Driver, User, Vehicle
 from schemas.schemas import VehicleCreateRequest, VehicleUpdateRequest
@@ -222,6 +223,10 @@ def update_vehicle(
     company = get_my_company(db, user)
     vehicle = _get_own_vehicle(db, user, vehicle_id)
     fields = data.model_dump(exclude_unset=True)
+
+    if fields.get("driver_email"):
+        driver = get_company_driver_by_email(db, company, str(fields.pop("driver_email")))
+        fields["driver_id"] = driver.id
 
     if "status" in fields:
         _validate_vehicle_status(fields["status"])

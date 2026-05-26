@@ -6,9 +6,9 @@ from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
 
 from controllers.drivers_controller import (
-    get_driver_by_id,
+    get_driver_for_user,
     get_my_driver,
-    list_drivers,
+    list_drivers_for_user,
     set_availability,
     update_my_driver,
 )
@@ -34,6 +34,7 @@ def _to_list_item(driver: Driver) -> DriverListItem:
         user_id=driver.user_id,
         company_id=driver.company_id,
         name=driver.user.name,
+        email=driver.user.email,
         average_rating=float(driver.average_rating),
         total_trips=driver.total_trips,
         available=driver.available,
@@ -90,8 +91,8 @@ def list_all(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    """Lista motoristas registados."""
-    drivers = list_drivers(db, available_only=available_only)
+    """Lista motoristas visiveis ao utilizador (empresa: so os da frota)."""
+    drivers = list_drivers_for_user(db, current_user, available_only=available_only)
     return [_to_list_item(d) for d in drivers]
 
 
@@ -101,5 +102,5 @@ def get_by_id(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    """Consulta motorista por id."""
-    return get_driver_by_id(db, driver_id)
+    """Consulta motorista por id (com controlo de acesso)."""
+    return get_driver_for_user(db, current_user, driver_id)

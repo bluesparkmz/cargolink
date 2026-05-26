@@ -273,6 +273,7 @@ class DriverListItem(BaseModel):
     user_id: int
     company_id: int | None = None
     name: str
+    email: str | None = None
     average_rating: float
     total_trips: int
     available: bool
@@ -325,9 +326,9 @@ class CompanyListItem(BaseModel):
 
 
 class CompanyDriverAttachRequest(BaseModel):
-    """Associar motorista existente a empresa autenticada."""
+    """Associar motorista existente a empresa autenticada pelo email de login."""
 
-    driver_id: int
+    email: EmailStr
 
 
 # ---------------------------------------------------------------------------
@@ -865,6 +866,7 @@ class VehicleUpdateRequest(BaseModel):
     """Atualização parcial do veículo."""
 
     driver_id: int | None = None
+    driver_email: EmailStr | None = None
     plate: str | None = Field(None, min_length=3, max_length=50)
     brand: str | None = None
     model_name: str | None = None

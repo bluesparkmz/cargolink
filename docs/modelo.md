@@ -148,7 +148,7 @@ POST /companies/me/drivers
 Body:
 ```json
 {
-  "driver_id": 1
+  "email": "motorista@exemplo.com"
 }
 ```
 Regras:

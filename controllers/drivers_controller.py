@@ -8,6 +8,8 @@ from sqlalchemy.orm import Session, joinedload
 from models.models import Driver, User
 from schemas.schemas import DriverProfileUpdateRequest
 
+from controllers.companies_controller import get_my_company
+
 
 def require_driver(user: User) -> None:
     """Garante que o utilizador autenticado é motorista."""
@@ -52,11 +54,54 @@ def get_driver_by_id(db: Session, driver_id: int) -> Driver:
 
 
 def list_drivers(db: Session, available_only: bool = False) -> list[Driver]:
-    """Lista motoristas; filtro opcional por disponibilidade."""
+    """Lista todos os motoristas (apenas uso interno/admin)."""
     query = db.query(Driver).options(joinedload(Driver.user))
     if available_only:
         query = query.filter(Driver.available.is_(True))
     return query.all()
+
+
+def list_drivers_for_user(db: Session, user: User, available_only: bool = False) -> list[Driver]:
+    """Listagem com privacidade: empresa ve so os seus; motorista usa /me."""
+    if user.user_type == "admin":
+        return list_drivers(db, available_only=available_only)
+    if user.user_type == "empresa":
+        from controllers.companies_controller import list_company_drivers
+
+        drivers = list_company_drivers(db, user)
+        if available_only:
+            drivers = [d for d in drivers if d.available]
+        return drivers
+    raise HTTPException(
+        status_code=status.HTTP_403_FORBIDDEN,
+        detail="Listagem de motoristas nao permitida. Empresa: use GET /companies/me/drivers",
+    )
+
+
+def get_driver_for_user(db: Session, user: User, driver_id: int) -> Driver:
+    """Consulta motorista com controlo de acesso."""
+    driver = get_driver_by_id(db, driver_id)
+    if user.user_type == "admin":
+        return driver
+    if user.user_type == "motorista":
+        if driver.user_id != user.id:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Acesso negado a este motorista",
+            )
+        return driver
+    if user.user_type == "empresa":
+        company = get_my_company(db, user)
+        if driver.company_id != company.id:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Motorista nao pertence a sua empresa",
+            )
+        return driver
+    raise HTTPException(
+        status_code=status.HTTP_403_FORBIDDEN,
+        detail="Acesso negado",
+    )
 
 
 def update_my_driver(db: Session, user: User, data: DriverProfileUpdateRequest) -> Driver:

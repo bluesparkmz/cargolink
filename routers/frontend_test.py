@@ -186,6 +186,31 @@ def frontend_test():
     .mini { color: var(--muted); font-size: 11px; margin: 2px 0; }
     .row-compact { display: flex; gap: 4px; flex-wrap: wrap; }
     .row-compact button { padding: 4px 8px; font-size: 11px; }
+    .workflow {
+      margin: 6px 0 8px;
+      padding: 8px 10px;
+      border: 1px dashed var(--method-post-border);
+      border-radius: 6px;
+      background: var(--method-post-bg);
+    }
+    .workflow-title {
+      display: block;
+      font-size: 12px;
+      font-weight: 700;
+      color: var(--method-post);
+      margin-bottom: 4px;
+    }
+    .workflow ol {
+      margin: 0 0 8px 18px;
+      padding: 0;
+      color: var(--muted);
+      font-size: 11px;
+      line-height: 1.5;
+    }
+    .workflow .row-compact button.btn-action {
+      font-size: 12px;
+      padding: 8px 14px;
+    }
     code { color: var(--warn); font-size: 11px; }
     pre {
       margin: 0;
@@ -354,8 +379,8 @@ def frontend_test():
       <button onclick="document.getElementById('companyAttachDriverDialog').close()">✕</button>
     </div>
     <form onsubmit="attachCompanyDriver(event)">
-      <p class="mini">Motorista deve existir (conta tipo motorista) e nao pertencer a outra empresa. Use GET /drivers para ver IDs.</p>
-      <label>Motorista ID <input name="driver_id" type="number" required></label>
+      <p class="mini">Email de login do motorista (conta tipo motorista). So quem conhece o email pode associar.</p>
+      <label>Email do motorista <input name="email" type="email" required placeholder="motorista@email.com"></label>
       <button>Associar</button>
     </form>
   </dialog>
@@ -368,7 +393,7 @@ def frontend_test():
     <form onsubmit="assignVehicleDriver(event)">
       <p class="mini">Motorista deve pertencer a sua empresa (POST /companies/me/drivers antes). Camiao deve ser da empresa (GET /vehicles/me).</p>
       <label>Vehicle ID <input name="vehicle_id" type="number" required></label>
-      <label>Motorista ID <input name="driver_id" type="number" required></label>
+      <label>Email do motorista <input name="driver_email" type="email" required placeholder="motorista@email.com"></label>
       <button>Atribuir</button>
     </form>
   </dialog>
@@ -576,14 +601,25 @@ def frontend_test():
 
   <section>
     <h2>Empresas</h2>
-    <p class="mini">Logado como empresa: associar motorista e depois atribuir camiao na secao Veiculos.</p>
+    <div class="workflow">
+      <span class="workflow-title">Como associar motorista a esta empresa</span>
+      <ol>
+        <li>Faca <strong>Login</strong> com conta tipo <code>empresa</code> (token no topo)</li>
+        <li>Peca o <strong>email de login</strong> do motorista (nao ha lista publica de motoristas)</li>
+        <li>Clique no botao verde <strong>Associar motorista a empresa</strong> e informe o email</li>
+        <li>Confirme com <em>GET motoristas da empresa</em> (lista so da sua frota)</li>
+        <li>Depois, em <strong>Veiculos</strong>: atribua o camiao ao motorista</li>
+      </ol>
+      <div class="row-compact">
+        <button type="button" data-method="post" class="btn-action" onclick="document.getElementById('companyAttachDriverDialog').showModal()">Associar motorista a empresa</button>
+        <button type="button" data-method="get" onclick="safeRun(() => api('/companies/me/drivers'))">GET motoristas da empresa</button>
+        <button type="button" data-method="delete" onclick="safeRun(detachCompanyDriver)">Remover motorista</button>
+      </div>
+    </div>
     <div class="row-compact">
       <button onclick="safeRun(() => api('/companies/me'))">GET /companies/me</button>
       <button onclick="safeRun(() => api('/companies'))">GET /companies</button>
       <button onclick="safeRun(() => requestById('/companies/', 'Company ID'))">GET /companies/{id}</button>
-      <button onclick="safeRun(() => api('/companies/me/drivers'))">GET /companies/me/drivers</button>
-      <button onclick="document.getElementById('companyAttachDriverDialog').showModal()">POST /companies/me/drivers</button>
-      <button onclick="safeRun(detachCompanyDriver)">DELETE /companies/me/drivers/{id}</button>
       <button onclick="safeRun(() => api('/companies/me/proposals'))">GET /companies/me/proposals</button>
       <button onclick="safeRun(() => api('/companies/me/trips'))">GET /companies/me/trips</button>
     </div>
@@ -596,9 +632,8 @@ def frontend_test():
       <button onclick="document.getElementById('driverUpdateDialog').showModal()">PATCH /drivers/me</button>
       <button onclick="document.getElementById('driverLocationDialog').showModal()">PATCH /drivers/me/location</button>
       <button onclick="document.getElementById('driverAvailabilityDialog').showModal()">PATCH /drivers/me/availability</button>
-      <button onclick="safeRun(() => api('/drivers'))">GET /drivers</button>
-      <button onclick="safeRun(() => api('/drivers?available_only=true'))">GET /drivers (disponiveis)</button>
-      <button onclick="safeRun(() => requestById('/drivers/', 'Driver ID'))">GET /drivers/{id}</button>
+      <button onclick="safeRun(() => api('/drivers'))">GET /drivers (so frota da empresa)</button>
+      <button onclick="safeRun(() => requestById('/drivers/', 'Driver ID da frota'))">GET /drivers/{id}</button>
     </div>
   </section>
 
@@ -894,10 +929,10 @@ async function attachCompanyDriver(e) {
 }
 
 async function detachCompanyDriver() {
-  const id = prompt("Driver ID a remover da empresa:");
-  if (!id) return;
+  const email = prompt("Email do motorista a remover da empresa:");
+  if (!email) return;
   if (!confirm("Remover motorista da empresa? Camioes atribuidos ficam sem motorista.")) return;
-  await api("/companies/me/drivers/" + id, { method: "DELETE" });
+  await api("/companies/me/drivers?email=" + encodeURIComponent(email.trim()), { method: "DELETE" });
   write({ message: "Motorista removido da empresa" });
 }
 
@@ -906,7 +941,7 @@ async function assignVehicleDriver(e) {
   await safeRun(async () => {
     const body = formObject(e.target);
     const vid = body.vehicle_id;
-    await api("/vehicles/" + vid, { method: "PATCH", json: { driver_id: body.driver_id } });
+    await api("/vehicles/" + vid, { method: "PATCH", json: { driver_email: body.driver_email } });
     document.getElementById("vehicleAssignDriverDialog").close();
   });
 }
@@ -1124,11 +1159,15 @@ async function listLoadsWithDistance() {
 
 function applyMethodButtonClasses() {
   document.querySelectorAll("button").forEach((btn) => {
+    const fromData = btn.dataset.method;
+    if (fromData) {
+      btn.classList.add("method-" + fromData.toLowerCase());
+      return;
+    }
     const text = btn.textContent.trim().toUpperCase();
     const match = text.match(/^(GET|POST|PATCH|PUT|DELETE)\\b/);
     if (!match) return;
-    const method = match[1].toLowerCase();
-    btn.classList.add("method-" + method);
+    btn.classList.add("method-" + match[1].toLowerCase());
   });
 }
 

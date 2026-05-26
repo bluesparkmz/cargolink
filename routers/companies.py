@@ -2,12 +2,14 @@
 Rotas de empresas transportadoras.
 """
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Query
+from pydantic import EmailStr
 from sqlalchemy.orm import Session
 
 from controllers.companies_controller import (
     attach_driver_to_company,
     detach_driver_from_company,
+    detach_driver_from_company_by_email,
     get_company_by_id,
     get_my_company,
     list_companies,
@@ -51,6 +53,7 @@ def _driver_to_list_item(driver: Driver) -> DriverListItem:
         user_id=driver.user_id,
         company_id=driver.company_id,
         name=driver.user.name,
+        email=driver.user.email,
         average_rating=float(driver.average_rating),
         total_trips=driver.total_trips,
         available=driver.available,
@@ -131,9 +134,19 @@ def attach_driver(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    """Associa motorista existente a empresa autenticada."""
-    driver = attach_driver_to_company(db, current_user, data.driver_id)
+    """Associa motorista existente a empresa pelo email de login."""
+    driver = attach_driver_to_company(db, current_user, str(data.email))
     return _driver_to_list_item(driver)
+
+
+@router.delete("/me/drivers", status_code=204)
+def detach_driver_by_email(
+    email: EmailStr = Query(..., description="Email de login do motorista"),
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Remove motorista da empresa pelo email."""
+    detach_driver_from_company_by_email(db, current_user, str(email))
 
 
 @router.delete("/me/drivers/{driver_id}", status_code=204)
@@ -142,7 +155,7 @@ def detach_driver(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    """Remove motorista da empresa autenticada."""
+    """Remove motorista da empresa pelo id interno."""
     detach_driver_from_company(db, current_user, driver_id)
 
 
