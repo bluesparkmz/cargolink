@@ -31,6 +31,22 @@ def frontend_test():
       --ok: #86efac;
       --err: #fca5a5;
       --warn: #fde68a;
+      /* Métodos HTTP — tons suaves alinhados ao tema escuro */
+      --method-get: #38bdf8;
+      --method-get-bg: rgba(56, 189, 248, 0.14);
+      --method-get-border: rgba(56, 189, 248, 0.45);
+      --method-post: #6ee7b7;
+      --method-post-bg: rgba(110, 231, 183, 0.12);
+      --method-post-border: rgba(110, 231, 183, 0.38);
+      --method-patch: #fbbf24;
+      --method-patch-bg: rgba(251, 191, 36, 0.12);
+      --method-patch-border: rgba(251, 191, 36, 0.45);
+      --method-put: #fb923c;
+      --method-put-bg: rgba(251, 146, 60, 0.12);
+      --method-put-border: rgba(251, 146, 60, 0.4);
+      --method-delete: #f87171;
+      --method-delete-bg: rgba(248, 113, 113, 0.12);
+      --method-delete-border: rgba(248, 113, 113, 0.45);
     }
     * { box-sizing: border-box; }
     body {
@@ -102,16 +118,68 @@ def frontend_test():
       font-weight: 600;
       width: auto;
       padding: 6px 10px;
+      border-left-width: 3px;
+      transition: background 0.15s, border-color 0.15s, color 0.15s;
     }
-    button:hover { border-color: var(--accent); }
-    button.get { border-left: 3px solid #0ea5e9; }
-    button.get:hover { background: rgba(14, 165, 233, 0.15); }
-    button.post { border-left: 3px solid #10b981; }
-    button.post:hover { background: rgba(16, 185, 129, 0.15); }
-    button.patch { border-left: 3px solid #f59e0b; }
-    button.patch:hover { background: rgba(245, 158, 11, 0.15); }
-    button.delete { border-left: 3px solid #ef4444; }
-    button.delete:hover { background: rgba(239, 68, 68, 0.15); }
+    button:not([class*="method-"]):hover { border-color: var(--accent); }
+    button.method-get {
+      color: #e0f2fe;
+      background: var(--method-get-bg);
+      border-color: var(--method-get-border);
+      border-left-color: var(--method-get);
+    }
+    button.method-get:hover {
+      background: rgba(56, 189, 248, 0.24);
+      border-color: var(--method-get);
+    }
+    button.method-post {
+      color: #d1fae5;
+      background: var(--method-post-bg);
+      border-color: var(--method-post-border);
+      border-left-color: var(--method-post);
+    }
+    button.method-post:hover {
+      background: rgba(110, 231, 183, 0.2);
+      border-color: var(--method-post);
+    }
+    button.method-patch {
+      color: #fef3c7;
+      background: var(--method-patch-bg);
+      border-color: var(--method-patch-border);
+      border-left-color: var(--method-patch);
+    }
+    button.method-patch:hover {
+      background: rgba(251, 191, 36, 0.22);
+      border-color: var(--method-patch);
+    }
+    button.method-put {
+      color: #ffedd5;
+      background: var(--method-put-bg);
+      border-color: var(--method-put-border);
+      border-left-color: var(--method-put);
+    }
+    button.method-put:hover {
+      background: rgba(251, 146, 60, 0.22);
+      border-color: var(--method-put);
+    }
+    button.method-delete {
+      color: #fee2e2;
+      background: var(--method-delete-bg);
+      border-color: var(--method-delete-border);
+      border-left-color: var(--method-delete);
+    }
+    button.method-delete:hover {
+      background: rgba(248, 113, 113, 0.22);
+      border-color: var(--method-delete);
+    }
+    select.method-get, select.method-post, select.method-patch, select.method-delete, select.method-put {
+      font-weight: 600;
+    }
+    select.method-get { border-left: 3px solid var(--method-get); color: #bae6fd; }
+    select.method-post { border-left: 3px solid var(--method-post); color: #a7f3d0; }
+    select.method-patch { border-left: 3px solid var(--method-patch); color: #fde68a; }
+    select.method-put { border-left: 3px solid var(--method-put); color: #fed7aa; }
+    select.method-delete { border-left: 3px solid var(--method-delete); color: #fecaca; }
     .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 4px; }
     .row { display: flex; gap: 4px; flex-wrap: wrap; align-items: center; }
     .row button { width: auto; }
@@ -186,14 +254,14 @@ def frontend_test():
     <form onsubmit="registerUser(event)">
       <div class="grid">
         <label>Nome <input name="name" value="Empresa Teste"></label>
-        <label>Email <input name="email" value="empresa@test.com"></label>
-        <label>Senha <input name="password" value="123456" type="password"></label>
+        <label>Email <input name="email" value=""></label>
+        <label>Senha <input name="password" value="" type="password"></label>
         <label>Tipo <select name="user_type">
           <option>empresa</option>
           <option>cliente</option>
           <option>motorista</option>
         </select></label>
-        <label>Telefone <input name="phone" value="840000001"></label>
+        <label>Telefone <input name="phone" value=""></label>
         <label>Empresa <input name="company_name" value="Teste Lda"></label>
         <label>Cidade <input name="city" value="Maputo"></label>
         <label>Provincia <input name="state" value="Maputo"></label>
@@ -398,6 +466,56 @@ def frontend_test():
     </form>
   </dialog>
 
+  <dialog id="driverUpdateDialog">
+    <div class="dialog-head">
+      <h2>Atualizar Motorista</h2>
+      <button onclick="document.getElementById('driverUpdateDialog').close()">✕</button>
+    </div>
+    <form onsubmit="updateDriver(event)">
+      <div class="grid">
+        <label>Carta <input name="license_number" value=""></label>
+        <label>Validade carta <input name="license_expiry" type="date"></label>
+        <label>Anos experiencia <input name="years_experience" type="number"></label>
+        <label>Disponivel <select name="available">
+          <option value="">(nao alterar)</option>
+          <option value="true">sim</option>
+          <option value="false">nao</option>
+        </select></label>
+      </div>
+      <button>Atualizar</button>
+    </form>
+  </dialog>
+
+  <dialog id="driverLocationDialog">
+    <div class="dialog-head">
+      <h2>Localizacao Motorista</h2>
+      <button onclick="document.getElementById('driverLocationDialog').close()">✕</button>
+    </div>
+    <form onsubmit="updateDriverLocation(event)">
+      <label>Latitude <input name="latitude" type="number" step="0.000001" value="-25.9692"></label>
+      <label>Longitude <input name="longitude" type="number" step="0.000001" value="32.5732"></label>
+      <label>Sincronizar veiculos <select name="sync_vehicles">
+        <option value="true">sim</option>
+        <option value="false">nao</option>
+      </select></label>
+      <button>Atualizar</button>
+    </form>
+  </dialog>
+
+  <dialog id="driverAvailabilityDialog">
+    <div class="dialog-head">
+      <h2>Disponibilidade</h2>
+      <button onclick="document.getElementById('driverAvailabilityDialog').close()">✕</button>
+    </div>
+    <form onsubmit="updateDriverAvailability(event)">
+      <label>Disponivel <select name="available">
+        <option value="true">sim</option>
+        <option value="false">nao</option>
+      </select></label>
+      <button>Atualizar</button>
+    </form>
+  </dialog>
+
   <!-- MAIN SECTIONS -->
   <section>
     <h2>Auth & Users</h2>
@@ -439,6 +557,19 @@ def frontend_test():
       <button onclick="safeRun(() => api('/companies/me/drivers'))">GET /companies/me/drivers</button>
       <button onclick="safeRun(() => api('/companies/me/proposals'))">GET /companies/me/proposals</button>
       <button onclick="safeRun(() => api('/companies/me/trips'))">GET /companies/me/trips</button>
+    </div>
+  </section>
+
+  <section>
+    <h2>Motoristas</h2>
+    <div class="row-compact">
+      <button onclick="safeRun(() => api('/drivers/me'))">GET /drivers/me</button>
+      <button onclick="document.getElementById('driverUpdateDialog').showModal()">PATCH /drivers/me</button>
+      <button onclick="document.getElementById('driverLocationDialog').showModal()">PATCH /drivers/me/location</button>
+      <button onclick="document.getElementById('driverAvailabilityDialog').showModal()">PATCH /drivers/me/availability</button>
+      <button onclick="safeRun(() => api('/drivers'))">GET /drivers</button>
+      <button onclick="safeRun(() => api('/drivers?available_only=true'))">GET /drivers (disponiveis)</button>
+      <button onclick="safeRun(() => requestById('/drivers/', 'Driver ID'))">GET /drivers/{id}</button>
     </div>
   </section>
 
@@ -622,7 +753,7 @@ function formObject(form) {
   const obj = {};
   for (const [k, v] of data.entries()) {
     if (v === "" || (v instanceof File)) continue;
-    if (["proposed_value", "amount", "weight", "volume", "value", "origin_lat", "origin_lng", "destination_lat", "destination_lng", "tonnage_capacity", "current_lat", "current_lng", "load_id", "vehicle_id", "driver_id", "proposal_id", "negotiation_id", "trip_id"].includes(k)) {
+    if (["proposed_value", "amount", "weight", "volume", "value", "origin_lat", "origin_lng", "destination_lat", "destination_lng", "tonnage_capacity", "current_lat", "current_lng", "latitude", "longitude", "years_experience", "load_id", "vehicle_id", "driver_id", "proposal_id", "negotiation_id", "trip_id"].includes(k)) {
       obj[k] = Number(v);
     } else if (v === "true" || v === "false") {
       obj[k] = v === "true";
@@ -774,6 +905,24 @@ async function startTrip(e) {
   await safeRun(() => api("/trips/" + tid + "/start", { method: "PATCH", json: body }));
 }
 
+async function updateDriver(e) {
+  e.preventDefault();
+  const body = formObject(e.target);
+  await safeRun(() => api("/drivers/me", { method: "PATCH", json: body }));
+}
+
+async function updateDriverLocation(e) {
+  e.preventDefault();
+  const body = formObject(e.target);
+  await safeRun(() => api("/drivers/me/location", { method: "PATCH", json: body }));
+}
+
+async function updateDriverAvailability(e) {
+  e.preventDefault();
+  const body = formObject(e.target);
+  await safeRun(() => api("/drivers/me/availability", { method: "PATCH", json: { available: body.available } }));
+}
+
 async function requestById(path, idLabel, suffix = "") {
   const id = prompt(idLabel + ":");
   if (!id) return;
@@ -915,6 +1064,29 @@ async function listLoadsWithDistance() {
   }
 }
 
+function applyMethodButtonClasses() {
+  document.querySelectorAll("button").forEach((btn) => {
+    const text = btn.textContent.trim().toUpperCase();
+    const match = text.match(/^(GET|POST|PATCH|PUT|DELETE)\\b/);
+    if (!match) return;
+    const method = match[1].toLowerCase();
+    btn.classList.add("method-" + method);
+  });
+}
+
+function syncManualMethodSelect() {
+  const select = document.querySelector('form[onsubmit="manualRequest(event)"] select[name="method"]');
+  if (!select) return;
+  const paint = () => {
+    select.classList.remove("method-get", "method-post", "method-patch", "method-put", "method-delete");
+    select.classList.add("method-" + select.value.toLowerCase());
+  };
+  select.addEventListener("change", paint);
+  paint();
+}
+
+applyMethodButtonClasses();
+syncManualMethodSelect();
 updateTokenState();
 </script>
 </body>
