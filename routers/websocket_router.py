@@ -9,6 +9,11 @@ Eventos recebidos:
 - unsubscribe_trip: {"type":"unsubscribe_trip","trip_id":1}
 - driver_location: {"type":"driver_location","trip_id":1,"latitude":-25.9,"longitude":32.5}
 - message_send: {"type":"message_send","load_id":1,"receiver_id":2,"body":"Ola"}
+- message_read: {"type":"message_read","message_id":1}
+- subscribe_proposal: {"type":"subscribe_proposal","proposal_id":1}
+- negotiation_create: {"type":"negotiation_create","proposal_id":1,"amount":25000}
+- negotiation_accept: {"type":"negotiation_accept","proposal_id":1,"negotiation_id":2}
+- negotiation_reject: {"type":"negotiation_reject","proposal_id":1,"negotiation_id":2}
 """
 
 from typing import Any
@@ -20,10 +25,22 @@ from sqlalchemy.orm import Session
 from constants import TRIP_GROUP_STATUSES, TRIP_GROUP_IN_PROGRESS
 from controllers.connection_manager import connection_manager
 from controllers.driver_trips_controller import add_driver_location
-from controllers.messages_controller import send_message
+from controllers.messages_controller import mark_message_read, send_message
+from controllers.proposals_controller import (
+    accept_counter_offer,
+    accept_proposal_by_id,
+    create_counter_offer,
+    get_proposal_detail,
+    reject_counter_offer,
+    reject_proposal_by_id,
+)
 from database import SessionLocal
 from models.models import Client, Company, Driver, Load, LoadProposal, Trip, User
-from schemas.schemas import MessageCreateRequest, TripLocationCreateRequest
+from schemas.schemas import (
+    MessageCreateRequest,
+    ProposalNegotiationCreateRequest,
+    TripLocationCreateRequest,
+)
 from security import decode_token
 
 router = APIRouter()
@@ -160,6 +177,15 @@ async def _join_trip_rooms(websocket: WebSocket, trip: Trip) -> None:
         await connection_manager.join(websocket, f"driver:{trip.driver_id}")
 
 
+async def _join_proposal_rooms(websocket: WebSocket, proposal: LoadProposal) -> None:
+    await connection_manager.join(websocket, f"proposal:{proposal.id}")
+    await connection_manager.join(websocket, f"load:{proposal.load_id}")
+    if proposal.company_id:
+        await connection_manager.join(websocket, f"company:{proposal.company_id}")
+    if proposal.driver_id:
+        await connection_manager.join(websocket, f"driver:{proposal.driver_id}")
+
+
 async def _join_initial_rooms(websocket: WebSocket, db: Session, user: User) -> None:
     for room in _profile_rooms(db, user):
         await connection_manager.join(websocket, room)
@@ -217,6 +243,30 @@ async def _handle_subscribe_load(websocket: WebSocket, db: Session, user: User, 
     await connection_manager.send_personal(
         websocket,
         {"type": "subscription_ok", "scope": "load", "load_id": load_id},
+    )
+
+
+async def _handle_subscribe_proposal(
+    websocket: WebSocket, db: Session, user: User, data: dict[str, Any]
+) -> None:
+    proposal_id = data.get("proposal_id")
+    if not isinstance(proposal_id, int):
+        await _send_error(websocket, "proposal_id invalido")
+        return
+    try:
+        proposal = get_proposal_detail(db, user, proposal_id)
+    except HTTPException as exc:
+        await _send_error(websocket, str(exc.detail), "request_error")
+        return
+    await _join_proposal_rooms(websocket, proposal)
+    await connection_manager.send_personal(
+        websocket,
+        {
+            "type": "subscription_ok",
+            "scope": "proposal",
+            "proposal_id": proposal.id,
+            "load_id": proposal.load_id,
+        },
     )
 
 
@@ -305,6 +355,129 @@ async def _handle_message_send(websocket: WebSocket, db: Session, user: User, da
     )
 
 
+async def _handle_message_read(websocket: WebSocket, db: Session, user: User, data: dict[str, Any]) -> None:
+    message_id = data.get("message_id")
+    if not isinstance(message_id, int):
+        await _send_error(websocket, "message_id invalido")
+        return
+    try:
+        message = mark_message_read(db, user, message_id)
+    except HTTPException as exc:
+        db.rollback()
+        await _send_error(websocket, str(exc.detail), "request_error")
+        return
+    event = {
+        "type": "message.read",
+        "message_id": message.id,
+        "load_id": message.load_id,
+        "reader_id": user.id,
+    }
+    await connection_manager.broadcast_rooms(
+        {f"user:{message.sender_id}", f"user:{message.receiver_id}", f"load:{message.load_id}"} - {"user:None"},
+        event,
+    )
+
+
+async def _handle_negotiation_create(
+    websocket: WebSocket, db: Session, user: User, data: dict[str, Any]
+) -> None:
+    proposal_id = data.get("proposal_id")
+    if not isinstance(proposal_id, int):
+        await _send_error(websocket, "proposal_id invalido")
+        return
+    try:
+        payload = ProposalNegotiationCreateRequest(
+            amount=data.get("amount"),
+            message=data.get("message"),
+        )
+    except ValidationError as exc:
+        await _send_error(websocket, str(exc), "validation_error")
+        return
+    try:
+        negotiation = create_counter_offer(db, user, proposal_id, payload)
+    except HTTPException as exc:
+        db.rollback()
+        await _send_error(websocket, str(exc.detail), "request_error")
+        return
+    await connection_manager.send_personal(
+        websocket,
+        {
+            "type": "negotiation.sent",
+            "proposal_id": proposal_id,
+            "negotiation_id": negotiation.id,
+        },
+    )
+
+
+async def _handle_negotiation_decision(
+    websocket: WebSocket,
+    db: Session,
+    user: User,
+    data: dict[str, Any],
+    *,
+    decision: str,
+) -> None:
+    proposal_id = data.get("proposal_id")
+    negotiation_id = data.get("negotiation_id")
+    if not isinstance(proposal_id, int) or not isinstance(negotiation_id, int):
+        await _send_error(websocket, "proposal_id ou negotiation_id invalido")
+        return
+    try:
+        if decision == "accept":
+            proposal = accept_counter_offer(db, user, proposal_id, negotiation_id)
+            event_type = "negotiation.accepted_ack"
+        else:
+            proposal = reject_counter_offer(db, user, proposal_id, negotiation_id)
+            event_type = "negotiation.rejected_ack"
+    except HTTPException as exc:
+        db.rollback()
+        await _send_error(websocket, str(exc.detail), "request_error")
+        return
+    await connection_manager.send_personal(
+        websocket,
+        {
+            "type": event_type,
+            "proposal_id": proposal.id,
+            "negotiation_id": negotiation_id,
+            "status": proposal.status,
+        },
+    )
+
+
+async def _handle_proposal_decision(
+    websocket: WebSocket,
+    db: Session,
+    user: User,
+    data: dict[str, Any],
+    *,
+    decision: str,
+) -> None:
+    proposal_id = data.get("proposal_id")
+    if not isinstance(proposal_id, int):
+        await _send_error(websocket, "proposal_id invalido")
+        return
+    try:
+        if decision == "accept":
+            proposal = accept_proposal_by_id(db, user, proposal_id)
+            event_type = "proposal.accepted_ack"
+        else:
+            proposal = reject_proposal_by_id(db, user, proposal_id)
+            event_type = "proposal.rejected_ack"
+    except HTTPException as exc:
+        db.rollback()
+        await _send_error(websocket, str(exc.detail), "request_error")
+        return
+    await connection_manager.send_personal(
+        websocket,
+        {
+            "type": event_type,
+            "proposal_id": proposal.id,
+            "load_id": proposal.load_id,
+            "status": proposal.status,
+        },
+    )
+
+
 @router.websocket("/ws")
 async def websocket_endpoint(websocket: WebSocket):
     token = websocket.query_params.get("token")
@@ -339,10 +512,24 @@ async def websocket_endpoint(websocket: WebSocket):
                 await _handle_unsubscribe_trip(websocket, data)
             elif event_type == "subscribe_load":
                 await _handle_subscribe_load(websocket, db, user, data)
+            elif event_type == "subscribe_proposal":
+                await _handle_subscribe_proposal(websocket, db, user, data)
             elif event_type == "driver_location":
                 await _handle_driver_location(websocket, db, user, data)
             elif event_type == "message_send":
                 await _handle_message_send(websocket, db, user, data)
+            elif event_type == "message_read":
+                await _handle_message_read(websocket, db, user, data)
+            elif event_type == "negotiation_create":
+                await _handle_negotiation_create(websocket, db, user, data)
+            elif event_type == "negotiation_accept":
+                await _handle_negotiation_decision(websocket, db, user, data, decision="accept")
+            elif event_type == "negotiation_reject":
+                await _handle_negotiation_decision(websocket, db, user, data, decision="reject")
+            elif event_type == "proposal_accept":
+                await _handle_proposal_decision(websocket, db, user, data, decision="accept")
+            elif event_type == "proposal_reject":
+                await _handle_proposal_decision(websocket, db, user, data, decision="reject")
             else:
                 await _send_error(websocket, "Tipo de evento desconhecido", "unknown_event")
     except WebSocketDisconnect:

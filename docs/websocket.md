@@ -7,6 +7,8 @@ O objetivo e permitir:
 - Motorista enviar GPS em tempo real.
 - Cliente acompanhar a carga em viagem.
 - Empresa acompanhar camioes/viagens da frota.
+- Chat em tempo real por carga.
+- Negociacao em tempo real por proposta.
 - Backend distribuir eventos para os utilizadores corretos.
 
 ## Endpoint
@@ -385,6 +387,167 @@ Quem recebe:
 user:{sender_id}
 user:{receiver_id}
 load:{load_id}
+```
+
+## Marcar mensagem como lida
+
+```json
+{
+  "type": "message_read",
+  "message_id": 31
+}
+```
+
+Quem recebe:
+
+```json
+{
+  "type": "message.read",
+  "message_id": 31,
+  "load_id": 4,
+  "reader_id": 10
+}
+```
+
+## Subscrever proposta
+
+Usado para acompanhar negociacao de uma proposta especifica.
+
+```json
+{
+  "type": "subscribe_proposal",
+  "proposal_id": 15
+}
+```
+
+Resposta:
+
+```json
+{
+  "type": "subscription_ok",
+  "scope": "proposal",
+  "proposal_id": 15,
+  "load_id": 4
+}
+```
+
+## Criar contraproposta pelo WebSocket
+
+```json
+{
+  "type": "negotiation_create",
+  "proposal_id": 15,
+  "amount": 25000,
+  "message": "Consigo fechar neste valor."
+}
+```
+
+Resposta para quem enviou:
+
+```json
+{
+  "type": "negotiation.sent",
+  "proposal_id": 15,
+  "negotiation_id": 3
+}
+```
+
+Os outros participantes recebem o evento ja existente:
+
+```json
+{
+  "type": "negotiation.created",
+  "proposal_id": 15,
+  "negotiation_id": 3,
+  "load_id": 4,
+  "sender_id": 8,
+  "status": "em_negociacao"
+}
+```
+
+## Aceitar contraproposta pelo WebSocket
+
+```json
+{
+  "type": "negotiation_accept",
+  "proposal_id": 15,
+  "negotiation_id": 3
+}
+```
+
+Resposta para quem aceitou:
+
+```json
+{
+  "type": "negotiation.accepted_ack",
+  "proposal_id": 15,
+  "negotiation_id": 3,
+  "status": "aceite"
+}
+```
+
+Tambem e emitido `negotiation.accepted`, a proposta fica aceite e a viagem e
+criada.
+
+## Recusar contraproposta pelo WebSocket
+
+```json
+{
+  "type": "negotiation_reject",
+  "proposal_id": 15,
+  "negotiation_id": 3
+}
+```
+
+Resposta:
+
+```json
+{
+  "type": "negotiation.rejected_ack",
+  "proposal_id": 15,
+  "negotiation_id": 3,
+  "status": "recusada"
+}
+```
+
+## Aceitar ou recusar proposta pelo WebSocket
+
+Aceitar:
+
+```json
+{
+  "type": "proposal_accept",
+  "proposal_id": 15
+}
+```
+
+Recusar:
+
+```json
+{
+  "type": "proposal_reject",
+  "proposal_id": 15
+}
+```
+
+Respostas:
+
+```json
+{
+  "type": "proposal.accepted_ack",
+  "proposal_id": 15,
+  "load_id": 4,
+  "status": "aceite"
+}
+```
+
+```json
+{
+  "type": "proposal.rejected_ack",
+  "proposal_id": 15,
+  "load_id": 4,
+  "status": "recusada"
+}
 ```
 
 ## Evento recebido: notification.created
