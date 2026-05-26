@@ -851,6 +851,7 @@ class VehicleCreateRequest(BaseModel):
     """Empresa regista novo camião."""
 
     driver_id: int | None = None
+    driver_email: EmailStr | None = None
     plate: str = Field(..., min_length=3, max_length=50)
     brand: str | None = Field(None, max_length=100)
     model_name: str | None = Field(None, max_length=100)

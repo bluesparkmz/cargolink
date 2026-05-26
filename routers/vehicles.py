@@ -77,6 +77,7 @@ def list_my(
 def create(
     plate: str = Form(...),
     driver_id: int | None = Form(None),
+    driver_email: str | None = Form(None, description="Email do motorista da empresa"),
     brand: str | None = Form(None),
     model_name: str | None = Form(None),
     vehicle_type: str | None = Form(None),
@@ -94,6 +95,7 @@ def create(
     """Empresa regista novo camiao com foto opcional."""
     data = VehicleCreateRequest(
         driver_id=driver_id,
+        driver_email=driver_email,
         plate=plate,
         brand=brand,
         model_name=model_name,

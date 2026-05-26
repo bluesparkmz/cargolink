@@ -342,7 +342,7 @@ def frontend_test():
     <form onsubmit="createVehicle(event)">
       <div class="grid">
         <label>Matricula <input name="plate" value="ABC-123-MP"></label>
-        <label>Motorista ID <input name="driver_id" type="number"></label>
+        <label>Email motorista <input name="driver_email" type="email" placeholder="opcional — da frota"></label>
         <label>Marca <input name="brand" value="Mercedes"></label>
         <label>Modelo <input name="model_name" value="Actros"></label>
         <label>Tipo <input name="vehicle_type" value="Camiao"></label>
@@ -363,7 +363,7 @@ def frontend_test():
     <form onsubmit="updateVehicle(event)">
       <label>Vehicle ID <input id="vehicleId" name="vehicle_id" type="number" readonly></label>
       <div class="grid">
-        <label>Motorista ID <input name="driver_id" type="number" placeholder="vazio = nao alterar"></label>
+        <label>Email motorista <input name="driver_email" type="email" placeholder="vazio = nao alterar"></label>
         <label>Marca <input name="brand" value=""></label>
         <label>Modelo <input name="model_name" value=""></label>
         <label>Status <input name="status" value=""></label>
@@ -639,7 +639,7 @@ def frontend_test():
 
   <section>
     <h2>Veiculos</h2>
-    <p class="mini">Cadastro: POST /vehicles com driver_id opcional. Camiao ja criado: PATCH motorista (motorista deve estar na empresa).</p>
+    <p class="mini">Motorista na frota (email). Criar: POST /vehicles com driver_email. Ja criado: PATCH motorista.</p>
     <div class="row-compact">
       <button onclick="safeRun(() => api('/vehicles'))">GET /vehicles disponiveis</button>
       <button onclick="safeRun(() => api('/vehicles/me'))">GET /vehicles/me</button>

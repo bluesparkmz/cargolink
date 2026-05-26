@@ -191,7 +191,17 @@ def create_vehicle(
     """Empresa regista novo camiao e pode atribuir motorista."""
     company = get_my_company(db, user)
     _validate_vehicle_status(data.status)
-    _validate_company_driver(db, company, data.driver_id)
+
+    driver_id = data.driver_id
+    if data.driver_email:
+        if driver_id is not None:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Informe driver_id ou driver_email, nao ambos",
+            )
+        driver = get_company_driver_by_email(db, company, str(data.driver_email))
+        driver_id = driver.id
+    _validate_company_driver(db, company, driver_id)
 
     existing = db.query(Vehicle).filter(Vehicle.plate == data.plate.strip().upper()).first()
     if existing:
@@ -200,7 +210,10 @@ def create_vehicle(
             detail="Matricula ja registada",
         )
 
-    payload = _normalize_vehicle_payload(data.model_dump())
+    payload = _normalize_vehicle_payload(
+        data.model_dump(exclude={"driver_id", "driver_email"})
+    )
+    payload["driver_id"] = driver_id
     payload["plate"] = data.plate.strip().upper()
     if photo_file is not None:
         payload["photo"] = save_vehicle_photo(photo_file)
@@ -225,6 +238,11 @@ def update_vehicle(
     fields = data.model_dump(exclude_unset=True)
 
     if fields.get("driver_email"):
+        if fields.get("driver_id") is not None:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Informe driver_id ou driver_email, nao ambos",
+            )
         driver = get_company_driver_by_email(db, company, str(fields.pop("driver_email")))
         fields["driver_id"] = driver.id
 
