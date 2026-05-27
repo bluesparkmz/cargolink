@@ -895,13 +895,25 @@ def frontend_test():
       <strong style="color: #6ee7b7;">Cargas Disponíveis:</strong>
       <div id="loadsList"></div>
     </div>
+    <div class="row-compact" style="margin-bottom: 8px;">
+      <button type="button" onclick="refreshProposalFleetOptions()" class="method-get" style="font-size: 11px;">Atualizar frota (drivers/veículos)</button>
+    </div>
     <form onsubmit="stepSendProposal(event)" style="margin: 8px 0;">
       <div class="grid">
         <label>Load ID <input id="proposalLoadId" name="load_id" type="number" placeholder="ex: 1" style="font-size: 11px;"></label>
         <label>Valor Proposto (MT) <input name="proposed_value" type="number" value="45000" style="font-size: 11px;"></label>
-        <label>Driver ID <input id="proposalDriverId" name="driver_id" type="number" placeholder="ex: 1" style="font-size: 11px;"></label>
-        <label>Vehicle ID <input id="proposalVehicleId" name="vehicle_id" type="number" placeholder="ex: 1" style="font-size: 11px;"></label>
+        <label>Driver ID
+          <select id="proposalDriverId" name="driver_id" style="font-size: 11px;">
+            <option value="">Selecione motorista</option>
+          </select>
+        </label>
+        <label>Vehicle ID
+          <select id="proposalVehicleId" name="vehicle_id" style="font-size: 11px;">
+            <option value="">Selecione veículo</option>
+          </select>
+        </label>
       </div>
+      <p class="mini" id="proposalFleetHint">Faça login como empresa e clique em "Atualizar frota".</p>
       <button style="font-size: 11px; width: 100%;">Enviar Proposta</button>
     </form>
 
@@ -1020,6 +1032,22 @@ function updateTokenState() {
   tokenState.textContent = token ? "sim (" + token.slice(0, 15) + "...)" : "nao";
 }
 
+async function rawApi(path, options = {}) {
+  const method = options.method || "GET";
+  const headers = options.headers || {};
+  if (options.auth !== false && getToken()) headers.Authorization = "Bearer " + getToken();
+  if (options.json) headers["Content-Type"] = "application/json";
+
+  const res = await fetch(path, {
+    method,
+    headers,
+    body: options.json ? JSON.stringify(options.json) : options.body,
+  });
+  const ct = res.headers.get("content-type") || "";
+  const body = ct.includes("application/json") ? await res.json() : await res.text();
+  return { ok: res.ok, status: res.status, body };
+}
+
 function write(data) {
   if (typeof data === "string") { result.textContent = data; return; }
   result.innerHTML = highlightJson(data);
@@ -1111,6 +1139,7 @@ async function loginUser(e) {
     const data = await api("/auth/login", { method: "POST", json: formObject(e.target), auth: false });
     if (data.access_token) {
       setToken(data.access_token);
+      await refreshProposalFleetOptions();
       document.getElementById("loginDialog").close();
     }
   });
@@ -1685,6 +1714,109 @@ const negotiationState = {
   tripId: null,
 };
 
+const proposalFleetState = {
+  drivers: [],
+  vehicles: [],
+};
+
+function updateProposalFleetHint(message, isError = false) {
+  const hint = document.getElementById("proposalFleetHint");
+  if (!hint) return;
+  hint.textContent = message;
+  hint.style.color = isError ? "var(--err)" : "var(--muted)";
+}
+
+function escapeOptionLabel(value) {
+  return String(value || "").replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;");
+}
+
+function renderDriverOptions(selectedDriverId = null) {
+  const select = document.getElementById("proposalDriverId");
+  if (!select) return;
+  const selected = selectedDriverId ?? Number(select.value || 0) || null;
+  const options = ['<option value="">Selecione motorista</option>'];
+  for (const driver of proposalFleetState.drivers) {
+    const id = Number(driver.id);
+    const name = driver.user?.name || driver.name || `Motorista ${id}`;
+    const selectedAttr = selected === id ? " selected" : "";
+    options.push(`<option value="${id}"${selectedAttr}>${id} - ${escapeOptionLabel(name)}</option>`);
+  }
+  select.innerHTML = options.join("");
+}
+
+function renderVehicleOptions(selectedVehicleId = null) {
+  const select = document.getElementById("proposalVehicleId");
+  if (!select) return;
+  const selectedDriverId = Number(document.getElementById("proposalDriverId")?.value || 0) || null;
+  const selected = selectedVehicleId ?? Number(select.value || 0) || null;
+  const options = ['<option value="">Selecione veículo</option>'];
+  const vehicles = proposalFleetState.vehicles.filter((vehicle) => {
+    if (!selectedDriverId) return true;
+    return vehicle.driver_id === null || vehicle.driver_id === undefined || Number(vehicle.driver_id) === selectedDriverId;
+  });
+  for (const vehicle of vehicles) {
+    const id = Number(vehicle.id);
+    const plate = vehicle.plate || vehicle.license_plate || `Veículo ${id}`;
+    const selectedAttr = selected === id ? " selected" : "";
+    options.push(`<option value="${id}"${selectedAttr}>${id} - ${escapeOptionLabel(plate)}</option>`);
+  }
+  select.innerHTML = options.join("");
+}
+
+function syncFleetSelectionState() {
+  const driverId = Number(document.getElementById("proposalDriverId")?.value || 0) || null;
+  const vehicleId = Number(document.getElementById("proposalVehicleId")?.value || 0) || null;
+  negotiationState.driverId = driverId;
+  negotiationState.vehicleId = vehicleId;
+}
+
+async function refreshProposalFleetOptions() {
+  if (!getToken()) {
+    updateProposalFleetHint("Faça login como empresa para carregar motoristas e veículos.", true);
+    return;
+  }
+
+  const [driversRes, vehiclesRes] = await Promise.all([
+    rawApi("/companies/me/drivers"),
+    rawApi("/vehicles/me"),
+  ]);
+
+  if (!driversRes.ok || !vehiclesRes.ok) {
+    const errorDetail = (driversRes.body && driversRes.body.detail) || (vehiclesRes.body && vehiclesRes.body.detail);
+    updateProposalFleetHint(`Não foi possível carregar frota: ${errorDetail || "verifique permissão da conta empresa."}`, true);
+    return;
+  }
+
+  const drivers = Array.isArray(driversRes.body) ? driversRes.body : [];
+  const vehicles = Array.isArray(vehiclesRes.body) ? vehiclesRes.body : [];
+  proposalFleetState.drivers = drivers;
+  proposalFleetState.vehicles = vehicles;
+
+  renderDriverOptions();
+  renderVehicleOptions();
+
+  const driverSelect = document.getElementById("proposalDriverId");
+  const vehicleSelect = document.getElementById("proposalVehicleId");
+
+  if (!driverSelect.value && drivers.length > 0) {
+    driverSelect.value = String(drivers[0].id);
+  }
+  renderVehicleOptions();
+  if (!vehicleSelect.value) {
+    const selectedDriverId = Number(driverSelect.value || 0) || null;
+    const candidateVehicle = vehicles.find((vehicle) => {
+      if (!selectedDriverId) return true;
+      return Number(vehicle.driver_id) === selectedDriverId || vehicle.driver_id === null || vehicle.driver_id === undefined;
+    });
+    if (candidateVehicle) {
+      vehicleSelect.value = String(candidateVehicle.id);
+    }
+  }
+
+  syncFleetSelectionState();
+  updateProposalFleetHint(`Frota carregada: ${drivers.length} motoristas, ${vehicles.length} veículos.`);
+}
+
 function updateNegotiationState(data) {
   const stateEl = document.getElementById("negotiationState");
   if (stateEl) {
@@ -1781,6 +1913,11 @@ async function stepSendProposal(e) {
     
     if (!loadId) {
       alert("Selecione uma carga");
+      return;
+    }
+
+    if (!formData.driver_id || !formData.vehicle_id) {
+      alert("Selecione motorista e veículo válidos na frota da empresa.");
       return;
     }
     
@@ -1920,11 +2057,13 @@ async function stepStartTrip(e) {
       return;
     }
     
-    const trip = await api(`/trips/${tripId}/start`, { 
+    const payload = {};
+    if (negotiationState.vehicleId) {
+      payload.vehicle_id = negotiationState.vehicleId;
+    }
+    const trip = await api(`/trips/${tripId}/start`, {
       method: 'PATCH',
-      json: {
-        vehicle_id: negotiationState.vehicleId || 1
-      }
+      json: payload
     });
     
     addNegotiationLog(`✅ Viagem iniciada! Status=${trip.status}`);
@@ -1941,6 +2080,15 @@ async function negotiationDemo() {
   addNegotiationLog("🎬 Demo iniciada");
   
   try {
+    syncFleetSelectionState();
+    if (!negotiationState.driverId || !negotiationState.vehicleId) {
+      await refreshProposalFleetOptions();
+      syncFleetSelectionState();
+    }
+    if (!negotiationState.driverId || !negotiationState.vehicleId) {
+      throw new Error("Selecione motorista e veículo antes de rodar o demo.");
+    }
+
     // 1. Cliente publica carga
     addNegotiationLog("1️⃣ Cliente publicando carga...");
     const loadRes = await api('/loads', { 
@@ -1972,8 +2120,8 @@ async function negotiationDemo() {
       method: 'POST',
       json: {
         proposed_value: 45000,
-        driver_id: parseInt(document.getElementById("proposalDriverId").value) || 1,
-        vehicle_id: parseInt(document.getElementById("proposalVehicleId").value) || 1,
+        driver_id: negotiationState.driverId,
+        vehicle_id: negotiationState.vehicleId,
         message: "Proposta demo"
       }
     });
@@ -1996,9 +2144,13 @@ async function negotiationDemo() {
     
     // 4. Motorista inicia viagem
     addNegotiationLog("4️⃣ Motorista iniciando viagem...");
-    const startRes = await api(`/trips/${tripRes.id}/start`, { 
+    const startPayload = {};
+    if (negotiationState.vehicleId) {
+      startPayload.vehicle_id = negotiationState.vehicleId;
+    }
+    const startRes = await api(`/trips/${tripRes.id}/start`, {
       method: 'PATCH',
-      json: { vehicle_id: negotiationState.vehicleId || 1 }
+      json: startPayload
     });
     addNegotiationLog(`✅ Viagem iniciada! Status=${startRes.status}`);
     
@@ -2015,6 +2167,14 @@ async function negotiationDemo() {
 applyMethodButtonClasses();
 syncManualMethodSelect();
 updateTokenState();
+document.getElementById("proposalDriverId")?.addEventListener("change", () => {
+  renderVehicleOptions();
+  syncFleetSelectionState();
+});
+document.getElementById("proposalVehicleId")?.addEventListener("change", syncFleetSelectionState);
+if (getToken()) {
+  safeRun(refreshProposalFleetOptions);
+}
 
 // Simulador de GPS para testes
 let gpsSimulator = null;
