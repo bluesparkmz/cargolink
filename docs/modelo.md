@@ -344,3 +344,293 @@ Empresa negocia.
 Motorista executa.
 Cliente contrata e confirma.
 ```
+
+---
+
+# WebSocket: Rastreamento GPS em Tempo Real
+
+## Objetivo do WebSocket
+
+O WebSocket permite comunicacao em tempo real entre:
+
+- **Motoristas**: enviar localizacao GPS em segundos
+- **Clientes**: acompanhar a carga e o camiao em tempo real
+- **Empresas**: monitorar a frota
+- **Chat**: mensagens instantaneas entre utilizadores
+
+## Conexao WebSocket
+
+Protocolo:
+```text
+ws://host/ws?token=<jwt>     (desenvolvimento)
+wss://host/ws?token=<jwt>    (producao com HTTPS)
+```
+
+Exemplo JavaScript:
+```javascript
+const token = localStorage.getItem("cargolink_token");
+const socket = new WebSocket("wss://api.cargolink.com/ws?token=" + token);
+
+socket.onopen = () => console.log("Conectado");
+socket.onmessage = (event) => {
+  const data = JSON.parse(event.data);
+  console.log("Mensagem recebida:", data);
+};
+socket.onerror = (error) => console.error("Erro:", error);
+```
+
+## Tipos de Mensagens
+
+### 1. Localizacao do Motorista
+
+**Motorista envia**:
+```json
+{
+  "type": "driver_location",
+  "trip_id": 1,
+  "latitude": -25.9692,
+  "longitude": 32.5732
+}
+```
+
+**Backend recebe e distribui para**:
+- Cliente (acompanhamento da carga)
+- Empresa (monitoramento da frota)
+- Admin (auditoria)
+
+**Log JSON salvo no servidor**:
+```json
+{
+  "type": "driver_location_log",
+  "timestamp": "2026-05-27T14:30:00Z",
+  "trip_id": 1,
+  "driver_id": 5,
+  "vehicle_id": 3,
+  "vehicle_plate": "ABC-123-MP",
+  "latitude": -25.9692,
+  "longitude": 32.5732,
+  "driver_name": "Joao Silva",
+  "vehicle_brand": "Volvo",
+  "vehicle_model": "FH",
+  "location_name": "Avenida Julius Nyerere, Maputo"
+}
+```
+
+### 2. Chat em Tempo Real
+
+**Utilizador envia**:
+```json
+{
+  "type": "message_send",
+  "load_id": 1,
+  "receiver_id": 2,
+  "body": "Chegando em 5 minutos"
+}
+```
+
+**Distribuido para**:
+- Receptor (notificacao instantanea)
+- Otros utilizadores na mesma carga (opcional)
+
+### 3. Subscrever a Viagem
+
+**Cliente/Empresa envia**:
+```json
+{
+  "type": "subscribe_trip",
+  "trip_id": 1
+}
+```
+
+**Efeito**:
+- Utilizador entra em sala `trip:1`
+- Recebe todas as mensagens desta viagem
+
+### 4. Negociacao em Tempo Real
+
+**Empresa negocia valor**:
+```json
+{
+  "type": "negotiation_create",
+  "proposal_id": 1,
+  "amount": 24000
+}
+```
+
+## Salas (Rooms) Internas
+
+O backend organiza mensagens em salas:
+
+```text
+user:{user_id}              -> notificacoes do utilizador
+role:{user_type}            -> broadcast por tipo (empresa, cliente, motorista)
+client:{client_id}          -> notificacoes do cliente
+company:{company_id}        -> notificacoes da empresa
+driver:{driver_id}          -> notificacoes do motorista
+trip:{trip_id}              -> mensagens da viagem
+load:{load_id}              -> mensagens da carga
+proposal:{proposal_id}      -> mensagens da proposta
+```
+
+## Rastreamento GPS: Fluxo Completo
+
+### 1. Motorista inicia viagem
+```text
+PATCH /trips/{trip_id}/start
+└─ Backend marca trip.status = "viagem_iniciada"
+└─ Motorista conecta ao WebSocket
+```
+
+### 2. Motorista envia GPS periodicamente
+```text
+Cada 3-10 segundos:
+WS: {"type": "driver_location", "trip_id": 1, "latitude": -25.9692, "longitude": 32.5732}
+└─ Backend processa e guarda em trip_locations
+└─ Envia para clientes conectados
+└─ Log em JSON
+```
+
+### 3. Cliente recebe atualizacoes
+```text
+Cliente conectado ao WebSocket e inscrito na viagem
+└─ Recebe: {"type": "driver_location", "latitude": ..., "longitude": ...}
+└─ Atualiza mapa em tempo real
+└─ Ve posicao do motorista e camiao
+```
+
+### 4. Empresa monitora frota
+```text
+Empresa conectada e inscrita em suas viagens
+└─ Recebe todas as localizacoes dos seus motoristas
+└─ Pode ver quantos camioes estao em transito
+└─ Pode calcular ETA (tempo estimado de chegada)
+```
+
+## Log de GPS em JSON
+
+Cada vez que o motorista envia localizacao, o backend salva:
+
+```json
+{
+  "id": 1,
+  "trip_id": 1,
+  "driver_id": 5,
+  "vehicle_id": 3,
+  "timestamp": "2026-05-27T14:30:15Z",
+  "latitude": -25.9692,
+  "longitude": 32.5732,
+  "accuracy": 5.0,
+  "speed": 85.5,
+  "heading": 180,
+  "meta": {
+    "driver_name": "Joao Silva",
+    "vehicle_plate": "ABC-123-MP",
+    "vehicle_brand": "Volvo",
+    "vehicle_model": "FH",
+    "trip_status": "viagem_iniciada",
+    "load_id": 10,
+    "client_name": "Pedro Costa"
+  }
+}
+```
+
+Tabela no banco:
+```sql
+CREATE TABLE trip_locations (
+  id SERIAL PRIMARY KEY,
+  trip_id INT NOT NULL,
+  driver_id INT NOT NULL,
+  vehicle_id INT NOT NULL,
+  latitude DECIMAL(10, 8),
+  longitude DECIMAL(11, 8),
+  timestamp DATETIME DEFAULT NOW(),
+  accuracy FLOAT,
+  speed FLOAT,
+  heading FLOAT,
+  created_at DATETIME DEFAULT NOW()
+);
+```
+
+## Casos de Uso
+
+### 1. Cliente acompanha carga
+```text
+1. Cliente faz login
+2. Cliente clica em "Acompanhar viagem"
+3. Front-end conecta ao WebSocket
+4. Front-end inscreve-se na viagem
+5. Recebe GPS do motorista a cada 5 segundos
+6. Mapa em tempo real mostra posicao do camiao
+```
+
+### 2. Motorista registra rotas
+```text
+1. Motorista inicia viagem (PATCH /trips/start)
+2. App comeca a enviar GPS via WebSocket a cada 10 seg
+3. Backend salva historico completo em trip_locations
+4. Motorista ve "Viagem registada com sucesso"
+```
+
+### 3. Empresa monitora frota
+```text
+1. Gerente conecta ao dashboard
+2. Ve todos os camioes "em transito" com cores diferentes
+3. Clica em camiao e ve GPS em tempo real
+4. Exporta relatorio de rotas realizadas
+```
+
+## Teste no Frontend
+
+A pagina de teste em `/test` inclui:
+
+- **Conectar WebSocket**: liga ao servidor em tempo real
+- **Chat Online**: enviar e receber mensagens
+- **Simular GPS**: envia coordenadas de teste a cada 3 segundos
+- **Logs GPS**: painel mostrando historico em JSON
+- **Subscrever Viagem**: para receber atualizacoes de uma viagem especifica
+
+### Exemplo de teste:
+
+1. Faca login com motorista
+2. Clique em "Conectar WebSocket"
+3. Informe Trip ID (ex: 1)
+4. Clique em "Subscribe Viagem"
+5. Clique em "Simular GPS"
+6. Observe o painel de chat e logs JSON atualizando a cada 3 segundos
+7. Em outra abinha, faca login com cliente e veja o mesmo GPS chegando
+
+## Performance e Limites
+
+Recomendacoes:
+
+```text
+Intervalo minimo de envio de GPS: 3 segundos
+Intervalo recomendado: 5-10 segundos
+Intervalo maximo: 30 segundos
+
+Salas por usuario: ~5-10 (user, role, client/company/driver, trip, load)
+Utilizadores por sala: ilimitado (limitado por memoria do servidor)
+
+Bandwidth por motorista: ~500 bytes / 5 segundos = 100 bytes/seg ~= 360KB/dia
+```
+
+## Autenticacao WebSocket
+
+O token JWT e validado na conexao:
+
+```text
+- Token ausente: recusa com codigo 1008
+- Token expirado: recusa com codigo 1008
+- Token invalido: recusa com codigo 1008
+- Utilizador inativo: recusa com codigo 1008
+- OK: conexao aceita, utilizador conectado
+```
+
+Renovar token:
+```javascript
+// Token expira em ~30 minutos
+// Cliente pode:
+1. Desconectar e reconectar com novo token
+2. Usar refresh token (se implementado)
+```
+

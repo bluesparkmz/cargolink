@@ -128,6 +128,7 @@ class Driver(Base):
     company: Mapped[Company | None] = relationship(back_populates="drivers")
     vehicles: Mapped[list[Vehicle]] = relationship(back_populates="driver")
     trips: Mapped[list[Trip]] = relationship(back_populates="driver")
+    gps_logs: Mapped[list["GPSLog"]] = relationship(back_populates="driver")
 
 
 class Vehicle(Base):
@@ -345,6 +346,26 @@ class TripStop(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
 
     trip: Mapped[Trip] = relationship(back_populates="stops")
+
+
+class GPSLog(Base):
+    """Tabela gps_logs — histórico de localização de motoristas em tempo real."""
+
+    __tablename__ = "gps_logs"
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    driver_id: Mapped[int] = mapped_column(ForeignKey("drivers.id", ondelete="CASCADE"), nullable=False)
+    latitude: Mapped[Decimal] = mapped_column(Numeric(10, 7), nullable=False)
+    longitude: Mapped[Decimal] = mapped_column(Numeric(10, 7), nullable=False)
+    timestamp: Mapped[datetime] = mapped_column(DateTime, nullable=False)
+    truck_plate: Mapped[str | None] = mapped_column("placa_camiao", String(50))
+    speed: Mapped[Decimal | None] = mapped_column("velocidade", Numeric(10, 2), default=0)
+    heading: Mapped[Decimal | None] = mapped_column("direcao", Numeric(6, 2), default=0)
+    altitude: Mapped[Decimal | None] = mapped_column("altitude", Numeric(10, 2))
+    accuracy: Mapped[Decimal | None] = mapped_column("precisao", Numeric(10, 2))
+    created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now(), index=True)
+
+    driver: Mapped[Driver] = relationship(back_populates="gps_logs")
 
 
 # ---------------------------------------------------------------------------

@@ -1,5 +1,5 @@
 """
-Pagina HTML completa para testar todos os endpoints da API.
+Página HTML completa para testar todos os endpoints da API com WebSocket, Chat e Rastreamento GPS em Tempo Real.
 """
 
 from fastapi import APIRouter
@@ -223,6 +223,110 @@ def frontend_test():
       background: var(--panel-2);
       font-size: 11px;
       line-height: 1.4;
+    }
+    /* WebSocket Styles */
+    .ws-container {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) 350px;
+      gap: 8px;
+      margin-top: 10px;
+    }
+    .ws-chat-panel {
+      border: 2px solid #6ee7b7;
+      border-radius: 6px;
+      display: grid;
+      grid-template-rows: auto minmax(0, 1fr) auto;
+      height: 400px;
+      background: var(--panel);
+    }
+    .ws-chat-header {
+      padding: 8px;
+      border-bottom: 1px solid var(--line);
+      color: #6ee7b7;
+      font-weight: bold;
+      font-size: 12px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .ws-status-badge {
+      display: inline-block;
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: #fca5a5;
+      margin-right: 4px;
+    }
+    .ws-status-badge.connected {
+      background: #86efac;
+    }
+    .ws-messages {
+      overflow-y: auto;
+      padding: 8px;
+      font-size: 11px;
+      line-height: 1.4;
+    }
+    .ws-message {
+      margin-bottom: 6px;
+      padding: 4px 6px;
+      background: var(--panel-2);
+      border-left: 2px solid #38bdf8;
+      border-radius: 2px;
+      word-wrap: break-word;
+    }
+    .ws-message.error {
+      border-left-color: #fca5a5;
+      color: #fca5a5;
+    }
+    .ws-message.success {
+      border-left-color: #86efac;
+      color: #86efac;
+    }
+    .ws-message.location {
+      border-left-color: #fbbf24;
+      color: #fde68a;
+    }
+    .ws-message.chat {
+      border-left-color: #6ee7b7;
+      color: #d1fae5;
+    }
+    .ws-message-time {
+      font-size: 9px;
+      color: var(--muted);
+      margin-right: 4px;
+    }
+    .ws-input-area {
+      border-top: 1px solid var(--line);
+      padding: 6px;
+      display: grid;
+      grid-template-columns: 1fr auto;
+      gap: 4px;
+    }
+    .ws-input-area input {
+      padding: 4px 6px;
+      font-size: 11px;
+    }
+    .ws-input-area button {
+      padding: 4px 8px;
+      font-size: 10px;
+      width: auto;
+    }
+    .gps-logs {
+      border: 2px solid #fbbf24;
+      border-radius: 6px;
+      padding: 8px;
+      background: var(--panel);
+      max-height: 400px;
+      overflow-y: auto;
+      font-size: 10px;
+    }
+    .gps-log-entry {
+      margin-bottom: 6px;
+      padding: 4px 6px;
+      background: var(--panel-2);
+      border-left: 2px solid #fbbf24;
+      border-radius: 2px;
+      font-family: monospace;
     }
     dialog {
       width: min(800px, calc(100vw - 20px));
@@ -740,6 +844,44 @@ def frontend_test():
   </section>
 
   <section>
+    <h2>WebSocket - Chat em Tempo Real & GPS</h2>
+    <div class="row-compact" style="margin-bottom: 8px;">
+      <button onclick="connectWebSocket()" class="method-post">🔌 Conectar WebSocket</button>
+      <button onclick="disconnectWebSocket()" class="method-delete">❌ Desconectar</button>
+      <button onclick="clearGPSLogs()" class="method-delete">Limpar Logs GPS</button>
+    </div>
+    <div class="row-compact">
+      <label style="flex: 1;">Trip ID para rastrear: <input id="tripIdWS" type="number" value="1" style="width: 100%; padding: 4px;"></label>
+      <button onclick="subscribeTrip()" class="method-post">Subscribe Viagem</button>
+      <button onclick="unsubscribeTrip()" class="method-delete">Unsubscribe</button>
+    </div>
+    <div class="ws-container">
+      <div></div>
+      <div class="ws-chat-panel">
+        <div class="ws-chat-header">
+          <span><span class="ws-status-badge" id="wsStatus"></span>Chat - WebSocket</span>
+          <span id="wsConnectionTime" style="font-size: 10px; color: var(--muted);">-</span>
+        </div>
+        <div class="ws-messages" id="wsChatMessages"></div>
+        <div class="ws-input-area">
+          <input id="wsChatInput" type="text" placeholder="Mensagem...">
+          <button onclick="sendWSMessage()">Enviar</button>
+        </div>
+      </div>
+    </div>
+    
+    <h3 style="margin-top: 10px; color: #fbbf24;">📍 Logs de GPS em Tempo Real</h3>
+    <div class="row-compact" style="margin-bottom: 8px;">
+      <label style="flex: 1;">Latitude: <input id="driverLat" type="number" step="0.000001" value="-25.9692" style="width: 100%; padding: 4px;"></label>
+      <label style="flex: 1;">Longitude: <input id="driverLng" type="number" step="0.000001" value="32.5732" style="width: 100%; padding: 4px;"></label>
+      <button onclick="sendDriverLocation()" class="method-post">Enviar Localização</button>
+    </div>
+    <div class="gps-logs" id="gpsLogs">
+      <div style="color: var(--muted); text-align: center; padding: 20px;">Logs de GPS aparecem aqui...</div>
+    </div>
+  </section>
+
+  <section>
     <h2>Request Manual</h2>
     <form onsubmit="manualRequest(event)">
       <div class="grid">
@@ -1016,6 +1158,255 @@ async function updateDriverAvailability(e) {
   await safeRun(() => api("/drivers/me/availability", { method: "PATCH", json: { available: body.available } }));
 }
 
+// ============= WebSocket Functions =============
+let websocket = null;
+let wsConnectionStart = null;
+const gpsLocationLogs = [];
+
+function getWSUrl() {
+  const protocol = window.location.protocol === 'https:' ? 'wss' : 'ws';
+  const token = getToken();
+  if (!token) {
+    setStatus("Erro: Token não disponível");
+    return null;
+  }
+  return protocol + "://" + window.location.host + "/ws?token=" + encodeURIComponent(token);
+}
+
+function addChatMessage(type, text) {
+  const container = document.getElementById("wsChatMessages");
+  const msg = document.createElement("div");
+  msg.className = "ws-message " + type;
+  const time = new Date().toLocaleTimeString('pt-PT', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+  msg.innerHTML = `<span class="ws-message-time">[${time}]</span> ${escapeHtml(text)}`;
+  container.appendChild(msg);
+  container.scrollTop = container.scrollHeight;
+}
+
+function addGPSLog(lat, lng, tripId, timestamp = new Date()) {
+  const log = {
+    timestamp: timestamp.toISOString(),
+    latitude: lat,
+    longitude: lng,
+    trip_id: tripId || null,
+    driver_position: { lat, lng },
+    vehicle_position: { lat, lng }
+  };
+  gpsLocationLogs.push(log);
+  
+  const logsContainer = document.getElementById("gpsLogs");
+  if (logsContainer.children.length === 1 && logsContainer.children[0].textContent.includes("Logs de GPS")) {
+    logsContainer.innerHTML = "";
+  }
+  
+  const entry = document.createElement("div");
+  entry.className = "gps-log-entry";
+  entry.textContent = JSON.stringify(log, null, 2);
+  logsContainer.appendChild(entry);
+  logsContainer.scrollTop = logsContainer.scrollHeight;
+  
+  addChatMessage("location", `📍 GPS: ${lat.toFixed(4)}, ${lng.toFixed(4)}`);
+}
+
+function clearGPSLogs() {
+  gpsLocationLogs.length = 0;
+  document.getElementById("gpsLogs").innerHTML = '<div style="color: var(--muted); text-align: center; padding: 20px;">Logs de GPS aparecem aqui...</div>';
+  addChatMessage("success", "Logs GPS limpos");
+}
+
+function updateWSStatus(connected) {
+  const badge = document.getElementById("wsStatus");
+  if (connected) {
+    badge.classList.add("connected");
+    badge.title = "Conectado";
+  } else {
+    badge.classList.remove("connected");
+    badge.title = "Desconectado";
+  }
+}
+
+function formatWSConnectionTime() {
+  if (!wsConnectionStart) return "-";
+  const seconds = Math.floor((Date.now() - wsConnectionStart) / 1000);
+  return `${seconds}s`;
+}
+
+function connectWebSocket() {
+  if (websocket && websocket.readyState === WebSocket.OPEN) {
+    addChatMessage("error", "Já conectado");
+    return;
+  }
+  
+  const url = getWSUrl();
+  if (!url) return;
+  
+  setStatus("Conectando ao WebSocket...");
+  websocket = new WebSocket(url);
+  
+  websocket.onopen = (event) => {
+    wsConnectionStart = Date.now();
+    updateWSStatus(true);
+    setStatus("WebSocket conectado");
+    addChatMessage("success", "🔌 Conectado ao WebSocket");
+    
+    // Auto-subscribe a trips ativas
+    const tripId = document.getElementById("tripIdWS").value;
+    if (tripId) {
+      subscribeTrip();
+    }
+  };
+  
+  websocket.onmessage = (event) => {
+    const data = JSON.parse(event.data);
+    handleWSMessage(data);
+  };
+  
+  websocket.onerror = (error) => {
+    setStatus("Erro no WebSocket");
+    addChatMessage("error", "❌ Erro: " + (error.message || "Desconexão"));
+  };
+  
+  websocket.onclose = () => {
+    updateWSStatus(false);
+    wsConnectionStart = null;
+    setStatus("WebSocket desconectado");
+    addChatMessage("error", "❌ Desconectado do WebSocket");
+  };
+  
+  // Atualizar status a cada segundo
+  const statusInterval = setInterval(() => {
+    if (!websocket || websocket.readyState !== WebSocket.OPEN) {
+      clearInterval(statusInterval);
+      return;
+    }
+    document.getElementById("wsConnectionTime").textContent = formatWSConnectionTime();
+  }, 1000);
+}
+
+function disconnectWebSocket() {
+  if (websocket) {
+    websocket.close();
+    websocket = null;
+    updateWSStatus(false);
+    setStatus("WebSocket desconectado manualmente");
+  }
+}
+
+function handleWSMessage(data) {
+  console.log("WS Message:", data);
+  
+  switch (data.type) {
+    case "driver_location":
+      addChatMessage("location", `📍 Motorista em: ${data.latitude.toFixed(4)}, ${data.longitude.toFixed(4)} (Trip ${data.trip_id})`);
+      addGPSLog(data.latitude, data.longitude, data.trip_id);
+      break;
+      
+    case "message_send":
+      addChatMessage("chat", `💬 ${data.body}`);
+      break;
+      
+    case "subscribe_trip":
+      addChatMessage("success", `✅ Inscrito na viagem ${data.trip_id}`);
+      break;
+      
+    case "unsubscribe_trip":
+      addChatMessage("success", `🔕 Desinscrição da viagem ${data.trip_id}`);
+      break;
+      
+    case "error":
+      addChatMessage("error", `❌ Erro: ${data.message}`);
+      break;
+      
+    default:
+      addChatMessage("success", `📩 ${JSON.stringify(data)}`);
+  }
+}
+
+function subscribeTrip() {
+  if (!websocket || websocket.readyState !== WebSocket.OPEN) {
+    addChatMessage("error", "WebSocket não conectado");
+    return;
+  }
+  
+  const tripId = parseInt(document.getElementById("tripIdWS").value);
+  if (!tripId) {
+    addChatMessage("error", "Trip ID inválido");
+    return;
+  }
+  
+  websocket.send(JSON.stringify({
+    type: "subscribe_trip",
+    trip_id: tripId
+  }));
+}
+
+function unsubscribeTrip() {
+  if (!websocket || websocket.readyState !== WebSocket.OPEN) {
+    addChatMessage("error", "WebSocket não conectado");
+    return;
+  }
+  
+  const tripId = parseInt(document.getElementById("tripIdWS").value);
+  if (!tripId) {
+    addChatMessage("error", "Trip ID inválido");
+    return;
+  }
+  
+  websocket.send(JSON.stringify({
+    type: "unsubscribe_trip",
+    trip_id: tripId
+  }));
+}
+
+function sendDriverLocation() {
+  if (!websocket || websocket.readyState !== WebSocket.OPEN) {
+    addChatMessage("error", "WebSocket não conectado");
+    return;
+  }
+  
+  const tripId = parseInt(document.getElementById("tripIdWS").value);
+  const lat = parseFloat(document.getElementById("driverLat").value);
+  const lng = parseFloat(document.getElementById("driverLng").value);
+  
+  if (!tripId || isNaN(lat) || isNaN(lng)) {
+    addChatMessage("error", "Trip ID ou coordenadas inválidas");
+    return;
+  }
+  
+  websocket.send(JSON.stringify({
+    type: "driver_location",
+    trip_id: tripId,
+    latitude: lat,
+    longitude: lng
+  }));
+  
+  addGPSLog(lat, lng, tripId);
+}
+
+function sendWSMessage() {
+  if (!websocket || websocket.readyState !== WebSocket.OPEN) {
+    addChatMessage("error", "WebSocket não conectado");
+    return;
+  }
+  
+  const input = document.getElementById("wsChatInput");
+  const message = input.value.trim();
+  
+  if (!message) return;
+  
+  // Simular envio de mensagem (descomentar conforme API)
+  // const tripId = parseInt(document.getElementById("tripIdWS").value);
+  // websocket.send(JSON.stringify({
+  //   type: "message_send",
+  //   load_id: 1,
+  //   receiver_id: 2,
+  //   body: message
+  // }));
+  
+  addChatMessage("chat", "👤 Você: " + message);
+  input.value = "";
+}
+
 async function requestById(path, idLabel, suffix = "") {
   const id = prompt(idLabel + ":");
   if (!id) return;
@@ -1185,6 +1576,69 @@ function syncManualMethodSelect() {
 applyMethodButtonClasses();
 syncManualMethodSelect();
 updateTokenState();
+
+// Simulador de GPS para testes
+let gpsSimulator = null;
+
+function startGPSSimulator() {
+  if (gpsSimulator) {
+    addChatMessage("error", "Simulador já está em execução");
+    return;
+  }
+  
+  if (!websocket || websocket.readyState !== WebSocket.OPEN) {
+    addChatMessage("error", "WebSocket não conectado");
+    return;
+  }
+  
+  let lat = parseFloat(document.getElementById("driverLat").value) || -25.9692;
+  let lng = parseFloat(document.getElementById("driverLng").value) || 32.5732;
+  
+  addChatMessage("success", "🚗 Simulador de GPS iniciado - atualiza a cada 3 segundos");
+  
+  gpsSimulator = setInterval(() => {
+    if (!websocket || websocket.readyState !== WebSocket.OPEN) {
+      clearInterval(gpsSimulator);
+      gpsSimulator = null;
+      addChatMessage("error", "WebSocket desconectado - Simulador parado");
+      return;
+    }
+    
+    // Variar coordenadas ligeiramente (simular movimento)
+    lat += (Math.random() - 0.5) * 0.001;
+    lng += (Math.random() - 0.5) * 0.001;
+    
+    document.getElementById("driverLat").value = lat.toFixed(6);
+    document.getElementById("driverLng").value = lng.toFixed(6);
+    
+    sendDriverLocation();
+  }, 3000);
+}
+
+function stopGPSSimulator() {
+  if (gpsSimulator) {
+    clearInterval(gpsSimulator);
+    gpsSimulator = null;
+    addChatMessage("success", "Simulador de GPS parado");
+  }
+}
+
+// Adicionar botão de simulador no HTML dinamicamente
+document.addEventListener("DOMContentLoaded", () => {
+  // Encontrar seção WebSocket e adicionar botões de simulador
+  const tripIdWS = document.getElementById("tripIdWS");
+  if (tripIdWS) {
+    const container = tripIdWS.parentElement.parentElement;
+    const simButtonsDiv = document.createElement("div");
+    simButtonsDiv.className = "row-compact";
+    simButtonsDiv.style.marginTop = "8px";
+    simButtonsDiv.innerHTML = `
+      <button onclick="startGPSSimulator()" class="method-post" style="background: rgba(251, 191, 36, 0.12); border-color: rgba(251, 191, 36, 0.45);">▶️ Simular GPS</button>
+      <button onclick="stopGPSSimulator()" class="method-delete" style="background: rgba(248, 113, 113, 0.12); border-color: rgba(248, 113, 113, 0.45);">⏹️ Parar Simulador</button>
+    `;
+    container.insertBefore(simButtonsDiv, tripIdWS.parentElement.nextSibling);
+  }
+});
 </script>
 </body>
 </html>"""

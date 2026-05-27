@@ -20,6 +20,7 @@ from routers.documents import router as documents_router
 from routers.documentation import router as documentation_router
 from routers.drivers import router as drivers_router
 from routers.frontend_test import router as frontend_test_router
+from routers.gps_router import router as gps_router
 from routers.loads import router as loads_router
 from routers.driver_trips import router as driver_trips_router
 from routers.messages import router as messages_router
@@ -82,6 +83,7 @@ app.include_router(driver_trips_router, prefix="/driver/trips", tags=["Driver"])
 app.include_router(stats_router, prefix="/stats", tags=["Stats"])
 app.include_router(vehicles_router, prefix="/vehicles", tags=["Vehicles"])
 app.include_router(wallet_router, prefix="/wallet", tags=["Wallet"])
+app.include_router(gps_router, tags=["GPS Rastreamento"])
 app.include_router(notifications_router, prefix="/notifications", tags=["Notifications"])
 app.include_router(messages_router, prefix="/messages", tags=["Messages"])
 app.include_router(websocket_router, tags=["Realtime"])
