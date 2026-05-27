@@ -1733,7 +1733,7 @@ function escapeOptionLabel(value) {
 function renderDriverOptions(selectedDriverId = null) {
   const select = document.getElementById("proposalDriverId");
   if (!select) return;
-  const selected = selectedDriverId ?? Number(select.value || 0) || null;
+  const selected = selectedDriverId ?? (Number(select.value || 0) || null);
   const options = ['<option value="">Selecione motorista</option>'];
   for (const driver of proposalFleetState.drivers) {
     const id = Number(driver.id);
@@ -1748,7 +1748,7 @@ function renderVehicleOptions(selectedVehicleId = null) {
   const select = document.getElementById("proposalVehicleId");
   if (!select) return;
   const selectedDriverId = Number(document.getElementById("proposalDriverId")?.value || 0) || null;
-  const selected = selectedVehicleId ?? Number(select.value || 0) || null;
+  const selected = selectedVehicleId ?? (Number(select.value || 0) || null);
   const options = ['<option value="">Selecione veículo</option>'];
   const vehicles = proposalFleetState.vehicles.filter((vehicle) => {
     if (!selectedDriverId) return true;
