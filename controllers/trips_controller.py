@@ -155,6 +155,46 @@ def _trip_user_ids(db: Session, trip: Trip) -> set[int]:
     return user_ids
 
 
+def _trip_status_event_payload(db: Session, trip: Trip) -> dict:
+    """Monta payload realtime com contexto de motorista/veiculo para cliente e empresa."""
+    driver = db.query(Driver).options(joinedload(Driver.user)).filter(Driver.id == trip.driver_id).first()
+    vehicle = db.query(Vehicle).filter(Vehicle.id == trip.vehicle_id).first() if trip.vehicle_id else None
+    load = db.query(Load).filter(Load.id == trip.load_id).first()
+    client_id = load.client_id if load else None
+
+    return {
+        "type": "trip.status_changed",
+        "trip_id": trip.id,
+        "load_id": trip.load_id,
+        "client_id": client_id,
+        "company_id": trip.company_id,
+        "status": trip.status,
+        "started_at": trip.started_at,
+        "arrived_at": trip.arrived_at,
+        "completed_at": trip.completed_at,
+        "driver": {
+            "id": driver.id,
+            "name": driver.user.name if driver and driver.user else None,
+            "phone": driver.user.phone if driver and driver.user else None,
+            "current_lat": driver.current_lat if driver else None,
+            "current_lng": driver.current_lng if driver else None,
+        }
+        if driver
+        else None,
+        "vehicle": {
+            "id": vehicle.id,
+            "plate": vehicle.plate,
+            "brand": vehicle.brand,
+            "model_name": vehicle.model_name,
+            "vehicle_type": vehicle.vehicle_type,
+            "current_lat": vehicle.current_lat,
+            "current_lng": vehicle.current_lng,
+        }
+        if vehicle
+        else None,
+    }
+
+
 def _emit_trip_status_changed(
     db: Session,
     trip: Trip,
@@ -178,15 +218,7 @@ def _emit_trip_status_changed(
     for notification in notifications:
         db.refresh(notification)
         emit_notification(notification)
-    emit_to_rooms(
-        _trip_event_rooms(trip),
-        {
-            "type": "trip.status_changed",
-            "trip_id": trip.id,
-            "load_id": trip.load_id,
-            "status": trip.status,
-        },
-    )
+    emit_to_rooms(_trip_event_rooms(trip), _trip_status_event_payload(db, trip))
 
 
 def list_my_trips(db: Session, user: User) -> list[Trip]:
