@@ -1,5 +1,8 @@
 """
-Página HTML completa para testar todos os endpoints da API com WebSocket, Chat e Rastreamento GPS em Tempo Real.
+Teste frontend para FLUXO COMPLETO:
+1. Negociação de proposta (cliente, empresa, motorista)
+2. Aceitar proposta (cria Trip)
+3. Iniciar viagem com WebSocket e GPS em tempo real
 """
 
 from fastapi import APIRouter
@@ -843,6 +846,99 @@ def frontend_test():
     </div>
   </section>
 
+  <!-- WORKFLOW: NEGOCIAÇÃO COMPLETA -->
+  <section id="negotiationSection">
+    <h2>🔄 Workflow: Negociação → Viagem → GPS</h2>
+    <div class="workflow" style="border-color: #6ee7b7; background: rgba(110, 231, 183, 0.08);">
+      <span class="workflow-title" style="color: #6ee7b7;">Fluxo Completo de Negociação</span>
+      <ol style="color: #d1fae5;">
+        <li><strong>1. Cliente publica carga</strong> (POST /loads)</li>
+        <li><strong>2. Empresa vê cargas disponíveis</strong> (GET /loads)</li>
+        <li><strong>3. Empresa envia proposta</strong> (POST /loads/{id}/proposals)</li>
+        <li><strong>4. Cliente vê propostas</strong> (GET /proposals/received)</li>
+        <li><strong>5. Cliente aceita proposta</strong> (POST /loads/{id}/proposals/{id}/accept)</li>
+        <li><strong>6. Trip é criada automaticamente</strong></li>
+        <li><strong>7. Motorista inicia viagem</strong> (PATCH /trips/{id}/start)</li>
+        <li><strong>8. Motorista envia localização GPS</strong> em tempo real</li>
+      </ol>
+      <div class="row-compact">
+        <button type="button" class="btn-action method-post" onclick="negotiationDemo()" style="background: rgba(110, 231, 183, 0.12); border-color: rgba(110, 231, 183, 0.38);">▶️ Demo Completo</button>
+      </div>
+    </div>
+
+    <h3 style="margin-top: 15px; color: #6ee7b7;">📋 Estado Atual</h3>
+    <pre id="negotiationState" style="font-size: 10px; background: rgba(110, 231, 183, 0.05); border: 1px solid rgba(110, 231, 183, 0.3); padding: 8px; border-radius: 4px; max-height: 200px; overflow-y: auto;">Nenhuma negociação iniciada</pre>
+
+    <h3 style="margin-top: 15px; color: #6ee7b7;">1️⃣ Cliente Publica Carga</h3>
+    <form onsubmit="stepPublishLoad(event)" style="margin: 8px 0;">
+      <div class="grid">
+        <label>Nome Carga <input name="load_name" value="Componentes Eletrônicos" style="font-size: 11px;"></label>
+        <label>Tipo <select name="load_type" style="font-size: 11px;">
+          <option value="eletronica">Eletrônica</option>
+          <option value="alimentos">Alimentos</option>
+          <option value="construcao">Construção</option>
+        </select></label>
+        <label>Peso (ton) <input name="weight" type="number" value="50" style="font-size: 11px;"></label>
+        <label>Valor (MT) <input name="value" type="number" value="50000" style="font-size: 11px;"></label>
+        <label>Origem <input name="origin" value="Maputo" style="font-size: 11px;"></label>
+        <label>Destino <input name="destination" value="Beira" style="font-size: 11px;"></label>
+      </div>
+      <button style="font-size: 11px; width: 100%;">Publicar Carga</button>
+    </form>
+
+    <h3 style="margin-top: 15px; color: #f0abfc;">2️⃣ Empresa Vê Cargas & Envia Proposta</h3>
+    <div class="row-compact" style="margin-bottom: 8px;">
+      <button onclick="stepListLoads()" class="method-get" style="font-size: 11px;">GET Cargas Disponíveis</button>
+      <button onclick="stepListLoadDetails()" class="method-get" style="font-size: 11px;">GET Detalhes Carga</button>
+    </div>
+    <div id="loadsListDiv" style="background: var(--panel-2); border: 1px solid var(--line); border-radius: 4px; padding: 8px; margin-bottom: 8px; max-height: 150px; overflow-y: auto; font-size: 10px; display: none;">
+      <strong style="color: #6ee7b7;">Cargas Disponíveis:</strong>
+      <div id="loadsList"></div>
+    </div>
+    <form onsubmit="stepSendProposal(event)" style="margin: 8px 0;">
+      <div class="grid">
+        <label>Load ID <input id="proposalLoadId" name="load_id" type="number" placeholder="ex: 1" style="font-size: 11px;"></label>
+        <label>Valor Proposto (MT) <input name="proposed_value" type="number" value="45000" style="font-size: 11px;"></label>
+        <label>Driver ID <input id="proposalDriverId" name="driver_id" type="number" placeholder="ex: 1" style="font-size: 11px;"></label>
+        <label>Vehicle ID <input id="proposalVehicleId" name="vehicle_id" type="number" placeholder="ex: 1" style="font-size: 11px;"></label>
+      </div>
+      <button style="font-size: 11px; width: 100%;">Enviar Proposta</button>
+    </form>
+
+    <h3 style="margin-top: 15px; color: #fbbf24;">3️⃣ Cliente Vê Propostas & Aceita</h3>
+    <div class="row-compact" style="margin-bottom: 8px;">
+      <button onclick="stepListProposals()" class="method-get" style="font-size: 11px;">GET Propostas Recebidas</button>
+    </div>
+    <div id="proposalsListDiv" style="background: var(--panel-2); border: 1px solid var(--line); border-radius: 4px; padding: 8px; margin-bottom: 8px; max-height: 150px; overflow-y: auto; font-size: 10px; display: none;">
+      <strong style="color: #fbbf24;">Propostas Recebidas:</strong>
+      <div id="proposalsList"></div>
+    </div>
+    <form onsubmit="stepAcceptProposal(event)" style="margin: 8px 0;">
+      <div class="grid">
+        <label>Load ID <input id="acceptLoadId" name="load_id" type="number" placeholder="ex: 1" style="font-size: 11px;"></label>
+        <label>Proposal ID <input id="acceptProposalId" name="proposal_id" type="number" placeholder="ex: 1" style="font-size: 11px;"></label>
+      </div>
+      <button style="font-size: 11px; width: 100%; background: rgba(134, 239, 172, 0.12); border-color: rgba(134, 239, 172, 0.38); color: #d1fae5;">✅ Aceitar Proposta (Cria Trip)</button>
+    </form>
+
+    <h3 style="margin-top: 15px; color: #38bdf8;">4️⃣ Motorista Inicia Viagem</h3>
+    <div class="row-compact" style="margin-bottom: 8px;">
+      <button onclick="stepListTrips()" class="method-get" style="font-size: 11px;">GET Minhas Viagens</button>
+    </div>
+    <div id="tripsListDiv" style="background: var(--panel-2); border: 1px solid var(--line); border-radius: 4px; padding: 8px; margin-bottom: 8px; max-height: 150px; overflow-y: auto; font-size: 10px; display: none;">
+      <strong style="color: #38bdf8;">Viagens do Motorista:</strong>
+      <div id="tripsList"></div>
+    </div>
+    <form onsubmit="stepStartTrip(event)" style="margin: 8px 0;">
+      <div class="grid">
+        <label>Trip ID <input id="startTripId" name="trip_id" type="number" placeholder="ex: 1" style="font-size: 11px;"></label>
+        <label>Latitude <input name="latitude" type="number" step="0.000001" value="-25.9692" style="font-size: 11px;"></label>
+        <label>Longitude <input name="longitude" type="number" step="0.000001" value="32.5732" style="font-size: 11px;"></label>
+      </div>
+      <button style="font-size: 11px; width: 100%; background: rgba(56, 189, 248, 0.12); border-color: rgba(56, 189, 248, 0.38); color: #bae6fd;">🚗 Iniciar Viagem</button>
+    </form>
+  </section>
+
   <section>
     <h2>WebSocket - Chat em Tempo Real & GPS</h2>
     <div class="row-compact" style="margin-bottom: 8px;">
@@ -1571,6 +1667,349 @@ function syncManualMethodSelect() {
   };
   select.addEventListener("change", paint);
   paint();
+}
+
+// ========================================================================================
+// FUNÇÕES DE NEGOCIAÇÃO E VIAGEM
+// ========================================================================================
+
+const negotiationState = {
+  clientId: null,
+  clientToken: null,
+  companyToken: null,
+  driverToken: null,
+  driverId: null,
+  vehicleId: null,
+  loadId: null,
+  proposalId: null,
+  tripId: null,
+};
+
+function updateNegotiationState(data) {
+  const stateEl = document.getElementById("negotiationState");
+  if (stateEl) {
+    stateEl.textContent = JSON.stringify({...negotiationState, ...data}, null, 2);
+  }
+}
+
+function addNegotiationLog(msg, type = "info") {
+  const stateEl = document.getElementById("negotiationState");
+  if (stateEl) {
+    stateEl.textContent = `[${new Date().toLocaleTimeString()}] ${msg}\n\n` + stateEl.textContent;
+  }
+}
+
+// 1. CLIENTE PUBLICA CARGA
+async function stepPublishLoad(e) {
+  e.preventDefault();
+  setStatus("Publicando carga...");
+  try {
+    const formData = formObject(e.target);
+    const res = await api('/loads', { method: 'POST', json: formData });
+    
+    negotiationState.loadId = res.id;
+    updateNegotiationState({ loadId: res.id });
+    addNegotiationLog(`✅ Carga publicada! ID=${res.id}, Código=${res.code}`);
+    
+    document.getElementById("proposalLoadId").value = res.id;
+    document.getElementById("acceptLoadId").value = res.id;
+    
+    write(res);
+  } catch (error) {
+    addNegotiationLog(`❌ Erro: ${error.message}`);
+    setStatus("Erro ao publicar carga");
+  }
+}
+
+// 2. LISTAR CARGAS DISPONÍVEIS
+async function stepListLoads() {
+  setStatus("Buscando cargas disponíveis...");
+  try {
+    const loads = await api('/loads', { auth: false });
+    const listDiv = document.getElementById("loadsListDiv");
+    const loadsList = document.getElementById("loadsList");
+    
+    if (Array.isArray(loads) && loads.length > 0) {
+      loadsList.innerHTML = loads.map(l => `
+        <div style="padding: 4px 0; border-bottom: 1px solid var(--line); cursor: pointer;" onclick="selectLoad(${l.id})">
+          <strong>ID ${l.id}</strong> - ${l.load_name} (${l.origin} → ${l.destination})
+          <br><span style="color: var(--muted);">MT ${l.value} | ${l.weight} ton | Negociável: ${l.negotiable}</span>
+        </div>
+      `).join("");
+      listDiv.style.display = "block";
+      addNegotiationLog(`✅ ${loads.length} cargas disponíveis`);
+    } else {
+      loadsList.innerHTML = '<p style="color: var(--muted);">Nenhuma carga disponível</p>';
+      listDiv.style.display = "block";
+    }
+    write({ cargas: loads.length, loads: loads.slice(0, 3) });
+  } catch (error) {
+    addNegotiationLog(`❌ Erro: ${error.message}`);
+  }
+}
+
+function selectLoad(loadId) {
+  document.getElementById("proposalLoadId").value = loadId;
+  negotiationState.loadId = loadId;
+  addNegotiationLog(`📍 Carga selecionada: ID=${loadId}`);
+}
+
+// LISTAR DETALHES DE CARGA
+async function stepListLoadDetails() {
+  setStatus("Buscando detalhes...");
+  try {
+    const loadId = document.getElementById("proposalLoadId").value;
+    if (!loadId) {
+      alert("Selecione uma carga antes");
+      return;
+    }
+    const load = await api(`/loads/${loadId}`, { auth: false });
+    write(load);
+    addNegotiationLog(`📄 Detalhes da carga ${loadId} carregados`);
+  } catch (error) {
+    addNegotiationLog(`❌ Erro: ${error.message}`);
+  }
+}
+
+// 3. EMPRESA ENVIA PROPOSTA
+async function stepSendProposal(e) {
+  e.preventDefault();
+  setStatus("Enviando proposta...");
+  try {
+    const formData = formObject(e.target);
+    const loadId = formData.load_id;
+    
+    if (!loadId) {
+      alert("Selecione uma carga");
+      return;
+    }
+    
+    const res = await api(`/loads/${loadId}/proposals`, { 
+      method: 'POST', 
+      json: {
+        proposed_value: formData.proposed_value,
+        driver_id: formData.driver_id,
+        vehicle_id: formData.vehicle_id,
+        message: "Proposta da nossa empresa"
+      }
+    });
+    
+    negotiationState.proposalId = res.id;
+    negotiationState.driverId = formData.driver_id;
+    negotiationState.vehicleId = formData.vehicle_id;
+    updateNegotiationState(negotiationState);
+    
+    document.getElementById("acceptProposalId").value = res.id;
+    addNegotiationLog(`✅ Proposta enviada! ID=${res.id}, Valor=MT ${res.proposed_value}`);
+    write(res);
+  } catch (error) {
+    addNegotiationLog(`❌ Erro: ${error.message}`);
+    setStatus("Erro ao enviar proposta");
+  }
+}
+
+// 4. CLIENTE VÊ PROPOSTAS
+async function stepListProposals() {
+  setStatus("Buscando propostas...");
+  try {
+    const proposals = await api('/proposals/received');
+    const listDiv = document.getElementById("proposalsListDiv");
+    const proposalsList = document.getElementById("proposalsList");
+    
+    if (Array.isArray(proposals) && proposals.length > 0) {
+      proposalsList.innerHTML = proposals.map(p => `
+        <div style="padding: 6px 0; border-bottom: 1px solid var(--line); cursor: pointer;" onclick="selectProposal(${p.load_id}, ${p.id})">
+          <strong>Proposta ID ${p.id}</strong> - Load ${p.load_id}
+          <br><span style="color: #6ee7b7;">MT ${p.proposed_value} | Status: ${p.status}</span>
+          <br><span style="color: var(--muted);">${p.company?.company_name || "Empresa"} | Driver: ${p.driver?.name || "N/A"}</span>
+        </div>
+      `).join("");
+      listDiv.style.display = "block";
+      addNegotiationLog(`✅ ${proposals.length} propostas encontradas`);
+    } else {
+      proposalsList.innerHTML = '<p style="color: var(--muted);">Nenhuma proposta recebida</p>';
+      listDiv.style.display = "block";
+    }
+    write({ proposals: proposals.length, data: proposals.slice(0, 2) });
+  } catch (error) {
+    addNegotiationLog(`❌ Erro: ${error.message}`);
+  }
+}
+
+function selectProposal(loadId, proposalId) {
+  document.getElementById("acceptLoadId").value = loadId;
+  document.getElementById("acceptProposalId").value = proposalId;
+  negotiationState.loadId = loadId;
+  negotiationState.proposalId = proposalId;
+  addNegotiationLog(`💰 Proposta selecionada: Load=${loadId}, Proposta=${proposalId}`);
+}
+
+// 5. CLIENTE ACEITA PROPOSTA (cria Trip)
+async function stepAcceptProposal(e) {
+  e.preventDefault();
+  setStatus("Aceitando proposta...");
+  try {
+    const formData = formObject(e.target);
+    const loadId = formData.load_id;
+    const proposalId = formData.proposal_id;
+    
+    if (!loadId || !proposalId) {
+      alert("Selecione load e proposta");
+      return;
+    }
+    
+    const trip = await api(`/loads/${loadId}/proposals/${proposalId}/accept`, { 
+      method: 'POST'
+    });
+    
+    negotiationState.tripId = trip.id;
+    updateNegotiationState(negotiationState);
+    
+    document.getElementById("startTripId").value = trip.id;
+    addNegotiationLog(`✅ Proposta aceita! Trip criada: ID=${trip.id}, Status=${trip.status}`);
+    write(trip);
+  } catch (error) {
+    addNegotiationLog(`❌ Erro: ${error.message}`);
+    setStatus("Erro ao aceitar proposta");
+  }
+}
+
+// 6. MOTORISTA VÊ VIAGENS
+async function stepListTrips() {
+  setStatus("Buscando viagens...");
+  try {
+    const trips = await api('/trips/me');
+    const listDiv = document.getElementById("tripsListDiv");
+    const tripsList = document.getElementById("tripsList");
+    
+    if (Array.isArray(trips) && trips.length > 0) {
+      tripsList.innerHTML = trips.map(t => `
+        <div style="padding: 6px 0; border-bottom: 1px solid var(--line); cursor: pointer;" onclick="selectTrip(${t.id})">
+          <strong>Trip ID ${t.id}</strong> - Load ${t.load_id}
+          <br><span style="color: #38bdf8;">Status: ${t.status}</span>
+        </div>
+      `).join("");
+      listDiv.style.display = "block";
+      addNegotiationLog(`✅ ${trips.length} viagens do motorista`);
+    } else {
+      tripsList.innerHTML = '<p style="color: var(--muted);">Nenhuma viagem</p>';
+      listDiv.style.display = "block";
+    }
+    write({ trips: trips.length, data: trips.slice(0, 2) });
+  } catch (error) {
+    addNegotiationLog(`❌ Erro: ${error.message}`);
+  }
+}
+
+function selectTrip(tripId) {
+  document.getElementById("startTripId").value = tripId;
+  negotiationState.tripId = tripId;
+  addNegotiationLog(`🚗 Viagem selecionada: ID=${tripId}`);
+}
+
+// 7. MOTORISTA INICIA VIAGEM
+async function stepStartTrip(e) {
+  e.preventDefault();
+  setStatus("Iniciando viagem...");
+  try {
+    const formData = formObject(e.target);
+    const tripId = formData.trip_id;
+    
+    if (!tripId) {
+      alert("Selecione uma viagem");
+      return;
+    }
+    
+    const trip = await api(`/trips/${tripId}/start`, { 
+      method: 'PATCH',
+      json: {
+        vehicle_id: negotiationState.vehicleId || 1
+      }
+    });
+    
+    addNegotiationLog(`✅ Viagem iniciada! Status=${trip.status}`);
+    write(trip);
+  } catch (error) {
+    addNegotiationLog(`❌ Erro: ${error.message}`);
+    setStatus("Erro ao iniciar viagem");
+  }
+}
+
+// DEMO COMPLETO
+async function negotiationDemo() {
+  setStatus("Iniciando demo do fluxo completo...");
+  addNegotiationLog("🎬 Demo iniciada");
+  
+  try {
+    // 1. Cliente publica carga
+    addNegotiationLog("1️⃣ Cliente publicando carga...");
+    const loadRes = await api('/loads', { 
+      method: 'POST', 
+      json: {
+        load_type: "eletronica",
+        load_name: "Demo - Componentes Eletrônicos",
+        weight: 50,
+        value: 50000,
+        negotiable: true,
+        origin: "Maputo",
+        destination: "Beira",
+        origin_lat: -25.9692,
+        origin_lng: 32.5732,
+        destination_lat: -19.8437,
+        destination_lng: 34.8488,
+        departure_date: new Date().toISOString().split('T')[0]
+      }
+    });
+    negotiationState.loadId = loadRes.id;
+    document.getElementById("proposalLoadId").value = loadRes.id;
+    addNegotiationLog(`✅ Carga criada: ID=${loadRes.id}`);
+    
+    await new Promise(r => setTimeout(r, 1000));
+    
+    // 2. Empresa envia proposta
+    addNegotiationLog("2️⃣ Empresa enviando proposta...");
+    const proposalRes = await api(`/loads/${loadRes.id}/proposals`, { 
+      method: 'POST',
+      json: {
+        proposed_value: 45000,
+        driver_id: parseInt(document.getElementById("proposalDriverId").value) || 1,
+        vehicle_id: parseInt(document.getElementById("proposalVehicleId").value) || 1,
+        message: "Proposta demo"
+      }
+    });
+    negotiationState.proposalId = proposalRes.id;
+    document.getElementById("acceptProposalId").value = proposalRes.id;
+    addNegotiationLog(`✅ Proposta enviada: ID=${proposalRes.id}`);
+    
+    await new Promise(r => setTimeout(r, 1000));
+    
+    // 3. Cliente aceita proposta
+    addNegotiationLog("3️⃣ Cliente aceitando proposta (Trip será criada)...");
+    const tripRes = await api(`/loads/${loadRes.id}/proposals/${proposalRes.id}/accept`, { 
+      method: 'POST'
+    });
+    negotiationState.tripId = tripRes.id;
+    document.getElementById("startTripId").value = tripRes.id;
+    addNegotiationLog(`✅ Trip criada: ID=${tripRes.id}, Status=${tripRes.status}`);
+    
+    await new Promise(r => setTimeout(r, 1000));
+    
+    // 4. Motorista inicia viagem
+    addNegotiationLog("4️⃣ Motorista iniciando viagem...");
+    const startRes = await api(`/trips/${tripRes.id}/start`, { 
+      method: 'PATCH',
+      json: { vehicle_id: negotiationState.vehicleId || 1 }
+    });
+    addNegotiationLog(`✅ Viagem iniciada! Status=${startRes.status}`);
+    
+    updateNegotiationState(negotiationState);
+    addNegotiationLog("🎉 Demo completo finalizado com sucesso!");
+    write(negotiationState);
+    
+  } catch (error) {
+    addNegotiationLog(`❌ Erro na demo: ${error.message}`);
+    write({ error: error.message });
+  }
 }
 
 applyMethodButtonClasses();
