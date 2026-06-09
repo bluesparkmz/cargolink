@@ -23,6 +23,7 @@ class Settings:
     ACCESS_TOKEN_EXPIRE_MINUTES: int
     AUTO_CONFIRM_MPESA_DEPOSITS: bool
     STORAGE_DIR: str
+    GOOGLE_CLIENT_IDS: list[str]
 
 
 settings = Settings()
@@ -32,3 +33,11 @@ settings.ALGORITHM = os.getenv("ALGORITHM", "HS256")
 settings.ACCESS_TOKEN_EXPIRE_MINUTES = _env_int("ACCESS_TOKEN_EXPIRE_MINUTES", 60 * 24)
 settings.AUTO_CONFIRM_MPESA_DEPOSITS = _env_bool("AUTO_CONFIRM_MPESA_DEPOSITS", True)
 settings.STORAGE_DIR = os.getenv("STORAGE_DIR", "/storage")
+settings.GOOGLE_CLIENT_IDS = [
+    client_id.strip()
+    for client_id in os.getenv(
+        "GOOGLE_CLIENT_IDS",
+        "750540528154-m9c1ee1gd8mfia95egfv2atlpbqhhki4.apps.googleusercontent.com",
+    ).split(",")
+    if client_id.strip()
+]

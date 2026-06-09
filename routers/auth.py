@@ -6,6 +6,7 @@ from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 
 from controllers.auth_controller import (
+    authenticate_google_user,
     authenticate_user,
     change_password,
     create_user_token,
@@ -15,6 +16,7 @@ from deps import get_current_user
 from database import get_db
 from models.models import User
 from schemas.schemas import (
+    GoogleLoginRequest,
     LoginRequest,
     PasswordChangeRequest,
     RegisterRequest,
@@ -37,6 +39,14 @@ def register(data: RegisterRequest, db: Session = Depends(get_db)):
 def login(data: LoginRequest, db: Session = Depends(get_db)):
     """Autentica por email e senha; devolve token JWT."""
     user = authenticate_user(db, data.email, data.password)
+    token = create_user_token(user)
+    return TokenResponse(access_token=token)
+
+
+@router.post("/google", response_model=TokenResponse)
+def google_login(data: GoogleLoginRequest, db: Session = Depends(get_db)):
+    """Autentica com id_token do Google; devolve token JWT local."""
+    user = authenticate_google_user(db, data.id_token)
     token = create_user_token(user)
     return TokenResponse(access_token=token)
 

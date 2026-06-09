@@ -36,6 +36,12 @@ class LoginRequest(BaseModel):
     password: str
 
 
+class GoogleLoginRequest(BaseModel):
+    """Token do Google recebido pelo app."""
+
+    id_token: str = Field(..., min_length=20)
+
+
 class PasswordChangeRequest(BaseModel):
     """Alterar senha (ecrã Segurança do perfil)."""
 
