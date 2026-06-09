@@ -9,3 +9,4 @@ bcrypt==4.0.1
 python-multipart>=0.0.17
 Pygments>=2.18.0
 google-auth>=2.40.0
+requests>=2.32.0
