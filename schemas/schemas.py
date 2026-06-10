@@ -364,6 +364,8 @@ class LoadTypeItem(BaseModel):
 
     id: str
     label: str
+    icon: str | None = None
+    image: str | None = None
 
 
 class LoadFillTypeItem(BaseModel):

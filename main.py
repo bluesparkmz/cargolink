@@ -66,6 +66,12 @@ app.mount(
     name="uploads",
 )
 
+app.mount(
+    "/static",
+    StaticFiles(directory="static", check_dir=False),
+    name="static",
+)
+
 # Cada router é registado aqui, um ficheiro por domínio
 app.include_router(auth_router, prefix="/auth", tags=["Auth"])
 app.include_router(users_router, prefix="/users", tags=["Users"])

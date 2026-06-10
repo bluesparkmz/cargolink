@@ -4,15 +4,15 @@ Constantes da aplicação CargoLink.
 
 # Tipos de carga (ecrã "Cadastrar nova carga")
 LOAD_TYPES = [
-    {"id": "areia", "label": "Areia"},
-    {"id": "cimento", "label": "Cimento"},
-    {"id": "cascalho", "label": "Cascalho"},
-    {"id": "combustivel", "label": "Combustível"},
-    {"id": "ferro", "label": "Ferro"},
-    {"id": "madeira", "label": "Madeira"},
-    {"id": "graos", "label": "Grãos"},
-    {"id": "mercadoria_geral", "label": "Mercadoria geral"},
-    {"id": "outro", "label": "Outro"},
+    {"id": "areia", "label": "Areia", "image": "/static/load-types/areea.png"},
+    {"id": "cimento", "label": "Cimento", "image": "/static/load-types/cimento.png"},
+    {"id": "cascalho", "label": "Cascalho", "image": "/static/load-types/area.png"},
+    {"id": "combustivel", "label": "Combustível", "image": "/static/load-types/barotes.png"},
+    {"id": "ferro", "label": "Ferro", "image": "/static/load-types/ferro.png"},
+    {"id": "madeira", "label": "Madeira", "image": "/static/load-types/area.png"},
+    {"id": "graos", "label": "Grãos", "image": "/static/load-types/area.png"},
+    {"id": "mercadoria_geral", "label": "Mercadoria geral", "image": "/static/load-types/cimento.png"},
+    {"id": "outro", "label": "Outro", "icon": "ellipsis-horizontal"},
 ]
 
 LOAD_TYPE_IDS = {item["id"] for item in LOAD_TYPES}
