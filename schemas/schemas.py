@@ -861,6 +861,7 @@ class VehicleDetailResponse(VehicleListItem):
     company_name: str | None = None
     driver_name: str | None = None
     driver_rating: float | None = None
+    driver_photo: str | None = None
 
 
 class VehicleCreateRequest(BaseModel):

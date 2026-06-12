@@ -61,6 +61,7 @@ def _to_detail(vehicle: Vehicle) -> VehicleDetailResponse:
         company_name=vehicle.company.company_name if vehicle.company else None,
         driver_name=vehicle.driver.user.name if vehicle.driver else None,
         driver_rating=float(vehicle.driver.average_rating) if vehicle.driver else None,
+        driver_photo=vehicle.driver.user.profile_photo if vehicle.driver and vehicle.driver.user else None,
     )
 
 
