@@ -6,6 +6,7 @@ from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from sqlalchemy.orm import Session
 
+from constants import USER_STATUS_ACTIVE, USER_STATUS_PENDING
 from database import get_db
 from models.models import User
 from security import decode_token
@@ -40,7 +41,7 @@ def get_current_user(
     if user is None:
         raise invalid_credentials
 
-    if user.status != "ativo":
+    if user.status not in (USER_STATUS_ACTIVE, USER_STATUS_PENDING):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Conta inativa ou suspensa",

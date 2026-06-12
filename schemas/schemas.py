@@ -5,7 +5,7 @@ Schemas Pydantic CargoLink — validação de entrada e saída da API.
 from datetime import date, datetime
 from typing import Literal
 
-from pydantic import BaseModel, EmailStr, Field
+from pydantic import BaseModel, ConfigDict, EmailStr, Field
 
 from constants import VEHICLE_STATUS_AVAILABLE
 
@@ -16,17 +16,20 @@ from constants import VEHICLE_STATUS_AVAILABLE
 
 
 class RegisterRequest(BaseModel):
-    """Dados para criar nova conta."""
+    """Dados para criar nova conta (tipo definido depois no onboarding)."""
+
+    model_config = ConfigDict(extra="forbid")
 
     name: str = Field(..., min_length=2, max_length=150)
     email: EmailStr = Field(...)
     password: str = Field(..., min_length=6, max_length=128)
-    user_type: Literal["cliente", "empresa", "motorista"] = "cliente"
     phone: str | None = None
-    client_type: str | None = "individual"
-    company_name: str | None = None
-    city: str | None = None
-    state: str | None = None
+
+
+class CompleteOnboardingRequest(BaseModel):
+    """Escolha do tipo de conta após registo."""
+
+    choice: Literal["carga", "camioes"]
 
 
 class LoginRequest(BaseModel):

@@ -388,15 +388,7 @@ def frontend_test():
         <label>Nome <input name="name" value="Empresa Teste"></label>
         <label>Email <input name="email" value=""></label>
         <label>Senha <input name="password" value="" type="password"></label>
-        <label>Tipo <select name="user_type">
-          <option>empresa</option>
-          <option>cliente</option>
-          <option>motorista</option>
-        </select></label>
         <label>Telefone <input name="phone" value=""></label>
-        <label>Empresa <input name="company_name" value="Teste Lda"></label>
-        <label>Cidade <input name="city" value="Maputo"></label>
-        <label>Provincia <input name="state" value="Maputo"></label>
       </div>
       <button>Cadastrar</button>
     </form>
@@ -1124,7 +1116,6 @@ async function registerUser(e) {
   e.preventDefault();
   await safeRun(async () => {
     const body = formObject(e.target);
-    if (body.user_type !== "empresa") delete body.company_name;
     const data = await api("/auth/register", { method: "POST", json: body, auth: false });
     if (data.access_token) {
       setToken(data.access_token);

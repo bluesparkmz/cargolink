@@ -9,6 +9,7 @@ from controllers.auth_controller import (
     authenticate_google_user,
     authenticate_user,
     change_password,
+    complete_onboarding,
     create_user_token,
     register_user,
 )
@@ -16,6 +17,7 @@ from deps import get_current_user
 from database import get_db
 from models.models import User
 from schemas.schemas import (
+    CompleteOnboardingRequest,
     GoogleLoginRequest,
     LoginRequest,
     PasswordChangeRequest,
@@ -29,10 +31,20 @@ router = APIRouter()
 
 @router.post("/register", response_model=TokenResponse, status_code=201)
 def register(data: RegisterRequest, db: Session = Depends(get_db)):
-    """Regista novo cliente ou motorista e devolve token JWT."""
+    """Regista novo utilizador (pendente) e devolve token JWT."""
     user = register_user(db, data)
     token = create_user_token(user)
     return TokenResponse(access_token=token)
+
+
+@router.post("/complete-onboarding", response_model=UserResponse)
+def onboarding(
+    data: CompleteOnboardingRequest,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Define tipo de conta: carga (cliente) ou camioes (empresa)."""
+    return complete_onboarding(db, current_user, data)
 
 
 @router.post("/login", response_model=TokenResponse)

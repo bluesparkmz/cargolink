@@ -12,9 +12,16 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from config import settings
+from constants import (
+    USER_STATUS_ACTIVE,
+    USER_STATUS_PENDING,
+    USER_TYPE_CLIENT,
+    USER_TYPE_COMPANY,
+    USER_TYPE_USUARIO,
+)
 from security import create_access_token, hash_password, verify_password
-from models.models import Client, Company, Driver, User, Wallet
-from schemas.schemas import PasswordChangeRequest, RegisterRequest
+from models.models import Client, Company, User, Wallet
+from schemas.schemas import CompleteOnboardingRequest, PasswordChangeRequest, RegisterRequest
 
 
 def _raise_duplicate_registration(exc: IntegrityError) -> None:
@@ -30,8 +37,8 @@ def _raise_duplicate_registration(exc: IntegrityError) -> None:
 
 def register_user(db: Session, data: RegisterRequest) -> User:
     """
-    Cria utilizador e perfil (cliente, empresa ou motorista).
-    Valida email único.
+    Cria utilizador genérico em estado pendente.
+    O tipo (cliente ou empresa) é definido no onboarding.
     """
     phone = (data.phone or "").strip()
     if db.query(User).filter(User.email == data.email).first():
@@ -51,7 +58,8 @@ def register_user(db: Session, data: RegisterRequest) -> User:
         email=data.email,
         phone=phone,
         password_hash=hash_password(data.password),
-        user_type=data.user_type,
+        user_type=USER_TYPE_USUARIO,
+        status=USER_STATUS_PENDING,
     )
     db.add(user)
     try:
@@ -61,26 +69,31 @@ def register_user(db: Session, data: RegisterRequest) -> User:
         _raise_duplicate_registration(exc)
     db.add(Wallet(user_id=user.id))
 
-    if data.user_type == "cliente":
-        profile = Client(
-            user_id=user.id,
-            client_type=data.client_type or "individual",
-            company_name=data.company_name,
-            city=data.city,
-            state=data.state,
+    try:
+        db.commit()
+    except IntegrityError as exc:
+        db.rollback()
+        _raise_duplicate_registration(exc)
+    db.refresh(user)
+    return user
+
+
+def complete_onboarding(db: Session, user: User, data: CompleteOnboardingRequest) -> User:
+    """Define o tipo de conta (cliente ou empresa) após registo pendente."""
+    if user.status != USER_STATUS_PENDING or user.user_type != USER_TYPE_USUARIO:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Conta já configurada",
         )
-        db.add(profile)
-    elif data.user_type == "motorista":
-        profile = Driver(user_id=user.id)
-        db.add(profile)
-    elif data.user_type == "empresa":
-        profile = Company(
-            user_id=user.id,
-            company_name=data.company_name or data.name,
-            city=data.city,
-            state=data.state,
-        )
-        db.add(profile)
+
+    if data.choice == "carga":
+        user.user_type = USER_TYPE_CLIENT
+        db.add(Client(user_id=user.id, client_type="individual"))
+    else:
+        user.user_type = USER_TYPE_COMPANY
+        db.add(Company(user_id=user.id, company_name=user.name))
+
+    user.status = USER_STATUS_ACTIVE
 
     try:
         db.commit()
@@ -104,7 +117,7 @@ def authenticate_user(db: Session, email: str, password: str) -> User:
             detail="Email ou senha incorretos",
         )
 
-    if user.status != "ativo":
+    if user.status not in (USER_STATUS_ACTIVE, USER_STATUS_PENDING):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Conta inativa ou suspensa",
@@ -155,7 +168,7 @@ def authenticate_google_user(db: Session, token: str) -> User:
 
     user = db.query(User).filter(User.email == email).first()
     if user:
-        if user.status != "ativo":
+        if user.status not in (USER_STATUS_ACTIVE, USER_STATUS_PENDING):
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="Conta inativa ou suspensa",
@@ -167,7 +180,8 @@ def authenticate_google_user(db: Session, token: str) -> User:
         email=email,
         phone=f"google:{google_sub}"[:30],
         password_hash=hash_password(secrets.token_urlsafe(32)),
-        user_type="cliente",
+        user_type=USER_TYPE_USUARIO,
+        status=USER_STATUS_PENDING,
         profile_photo=payload.get("picture"),
         verified=True,
     )
@@ -179,7 +193,6 @@ def authenticate_google_user(db: Session, token: str) -> User:
         _raise_duplicate_registration(exc)
 
     db.add(Wallet(user_id=user.id))
-    db.add(Client(user_id=user.id, client_type="individual"))
 
     try:
         db.commit()

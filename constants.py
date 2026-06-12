@@ -108,6 +108,14 @@ VEHICLE_STATUSES = {
     VEHICLE_STATUS_INACTIVE,
 }
 
+# Utilizadores
+USER_TYPE_USUARIO = "usuario"
+USER_TYPE_CLIENT = "cliente"
+USER_TYPE_COMPANY = "empresa"
+USER_TYPE_DRIVER = "motorista"
+USER_STATUS_PENDING = "pendente"
+USER_STATUS_ACTIVE = "ativo"
+
 # Carteira e pagamentos
 TRANSACTION_TYPE_DEPOSIT = "deposito"
 TRANSACTION_TYPE_WITHDRAWAL = "levantamento"
