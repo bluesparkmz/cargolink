@@ -5,9 +5,9 @@ Schemas Pydantic CargoLink — validação de entrada e saída da API.
 from datetime import date, datetime
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, EmailStr, Field
+from pydantic import BaseModel, ConfigDict, EmailStr, Field, computed_field
 
-from constants import VEHICLE_STATUS_AVAILABLE
+from constants import USER_STATUS_PENDING, USER_TYPE_USUARIO, VEHICLE_STATUS_AVAILABLE
 
 
 # ---------------------------------------------------------------------------
@@ -72,6 +72,11 @@ class UserResponse(BaseModel):
     profile_photo: str | None = None
 
     model_config = {"from_attributes": True}
+
+    @computed_field  # type: ignore[prop-decorator]
+    @property
+    def needs_onboarding(self) -> bool:
+        return self.user_type == USER_TYPE_USUARIO or self.status == USER_STATUS_PENDING
 
 
 # ---------------------------------------------------------------------------

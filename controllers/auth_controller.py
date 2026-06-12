@@ -75,12 +75,23 @@ def register_user(db: Session, data: RegisterRequest) -> User:
         db.rollback()
         _raise_duplicate_registration(exc)
     db.refresh(user)
+    if user.user_type != USER_TYPE_USUARIO or user.status != USER_STATUS_PENDING:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Falha ao criar conta pendente",
+        )
     return user
 
 
 def complete_onboarding(db: Session, user: User, data: CompleteOnboardingRequest) -> User:
     """Define o tipo de conta (cliente ou empresa) após registo pendente."""
-    if user.status != USER_STATUS_PENDING or user.user_type != USER_TYPE_USUARIO:
+    if user.user_type != USER_TYPE_USUARIO and user.status != USER_STATUS_PENDING:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Conta já configurada",
+        )
+
+    if user.user_type in (USER_TYPE_CLIENT, USER_TYPE_COMPANY):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Conta já configurada",
