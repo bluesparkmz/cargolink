@@ -20,4 +20,4 @@ def dashboard_stats(
     db: Session = Depends(get_db),
 ):
     """Contagens para os cards do ecrã inicial (cargas e camiões)."""
-    return get_dashboard_stats(db)
+    return get_dashboard_stats(db, current_user)

@@ -17,10 +17,12 @@ from config import settings
 from constants import (
     BLOCKED_CONTENT_TYPES,
     BLOCKED_FILE_EXTENSIONS,
+    LOAD_ACTIVE_STATUSES,
     LOAD_FILL_IDS,
     LOAD_FILL_LABELS,
     LOAD_STATUS_ACCEPTED,
     LOAD_STATUS_AVAILABLE,
+    LOAD_STATUS_IN_TRANSIT,
     LOAD_TYPE_IDS,
     LOAD_TYPE_LABELS,
     MAX_LOAD_IMAGES,
@@ -282,9 +284,120 @@ def build_load_detail_response(db: Session, load: Load) -> LoadDetailResponse:
     )
 
 
-def get_load_detail_response(db: Session, load_id: int) -> LoadDetailResponse:
+def _user_has_load_relation(db: Session, user: User, load: Load) -> bool:
+    """Verifica se o utilizador tem relação com a carga (cliente, empresa ou motorista)."""
+    if user.user_type == "admin":
+        return True
+
+    if user.user_type == "cliente":
+        client = db.query(Client).filter(Client.user_id == user.id).first()
+        return client is not None and load.client_id == client.id
+
+    trip = db.query(Trip).filter(Trip.load_id == load.id).first()
+
+    if user.user_type == "motorista":
+        driver = db.query(Driver).filter(Driver.user_id == user.id).first()
+        if not driver:
+            return False
+        if trip and trip.driver_id == driver.id:
+            return True
+        return (
+            db.query(LoadProposal)
+            .filter(LoadProposal.load_id == load.id, LoadProposal.driver_id == driver.id)
+            .first()
+            is not None
+        )
+
+    if user.user_type == "empresa":
+        company = db.query(Company).filter(Company.user_id == user.id).first()
+        if not company:
+            return False
+        if trip and trip.company_id == company.id:
+            return True
+        return (
+            db.query(LoadProposal)
+            .filter(LoadProposal.load_id == load.id, LoadProposal.company_id == company.id)
+            .first()
+            is not None
+        )
+
+    return False
+
+
+def _ensure_can_view_load(db: Session, user: User, load: Load) -> None:
+    """Bloqueia acesso a cargas sem relação; marketplace só para empresas."""
+    if user.user_type == "admin":
+        return
+
+    if load.status == LOAD_STATUS_AVAILABLE:
+        if user.user_type == "empresa":
+            return
+        if _user_has_load_relation(db, user, load):
+            return
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Sem acesso a esta carga")
+
+    if not _user_has_load_relation(db, user, load):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Sem acesso a esta carga")
+
+
+def _related_load_ids_subquery(db: Session, user: User):
+    """IDs de cargas ligadas ao utilizador autenticado."""
+    if user.user_type == "cliente":
+        client = db.query(Client).filter(Client.user_id == user.id).first()
+        if not client:
+            return None
+        return db.query(Load.id).filter(Load.client_id == client.id)
+
+    if user.user_type == "empresa":
+        company = db.query(Company).filter(Company.user_id == user.id).first()
+        if not company:
+            return None
+        trip_load_ids = db.query(Trip.load_id).filter(Trip.company_id == company.id)
+        proposal_load_ids = db.query(LoadProposal.load_id).filter(
+            LoadProposal.company_id == company.id
+        )
+        return db.query(Load.id).filter(
+            Load.id.in_(trip_load_ids) | Load.id.in_(proposal_load_ids)
+        )
+
+    if user.user_type == "motorista":
+        driver = db.query(Driver).filter(Driver.user_id == user.id).first()
+        if not driver:
+            return None
+        trip_load_ids = db.query(Trip.load_id).filter(Trip.driver_id == driver.id)
+        proposal_load_ids = db.query(LoadProposal.load_id).filter(
+            LoadProposal.driver_id == driver.id
+        )
+        return db.query(Load.id).filter(
+            Load.id.in_(trip_load_ids) | Load.id.in_(proposal_load_ids)
+        )
+
+    return None
+
+
+def list_related_loads(
+    db: Session,
+    user: User,
+    *,
+    status_filter: str | None = None,
+) -> list[Load]:
+    """Lista cargas ligadas ao utilizador (cliente, empresa ou motorista)."""
+    related_ids = _related_load_ids_subquery(db, user)
+    if related_ids is None:
+        return []
+
+    query = db.query(Load).filter(Load.id.in_(related_ids))
+    if status_filter:
+        query = query.filter(Load.status == status_filter)
+    return query.order_by(Load.created_at.desc()).all()
+
+
+def get_load_detail_response(db: Session, load_id: int, user: User | None = None) -> LoadDetailResponse:
     """Detalhe completo da carga para a API."""
-    return build_load_detail_response(db, get_load_detail(db, load_id))
+    load = get_load_detail(db, load_id)
+    if user is not None:
+        _ensure_can_view_load(db, user, load)
+    return build_load_detail_response(db, load)
 
 
 def get_client_or_403(db: Session, user: User) -> Client:
@@ -478,6 +591,7 @@ def create_load_with_files(
 
 def list_available_loads(
     db: Session,
+    user: User,
     *,
     status_filter: str | None = "disponivel",
     load_type: str | None = None,
@@ -487,9 +601,26 @@ def list_available_loads(
     departure_date_from: date | None = None,
     departure_date_to: date | None = None,
 ) -> list[Load]:
-    """Lista cargas com filtros (marketplace e pesquisa do app)."""
-    query = db.query(Load)
-    if status_filter:
+    """Lista cargas com filtros; em andamento só para quem tem relação com a carga."""
+    if status_filter in (LOAD_STATUS_IN_TRANSIT, LOAD_STATUS_ACCEPTED, *LOAD_ACTIVE_STATUSES):
+        return list_related_loads(db, user, status_filter=status_filter)
+
+    if status_filter and status_filter not in (LOAD_STATUS_AVAILABLE, None):
+        return list_related_loads(db, user, status_filter=status_filter)
+
+    if user.user_type == "empresa":
+        query = db.query(Load).filter(Load.status == LOAD_STATUS_AVAILABLE)
+    elif user.user_type == "cliente":
+        client = db.query(Client).filter(Client.user_id == user.id).first()
+        if not client:
+            return []
+        query = db.query(Load).filter(Load.client_id == client.id)
+        if status_filter:
+            query = query.filter(Load.status == status_filter)
+    else:
+        return []
+
+    if status_filter and user.user_type == "empresa":
         query = query.filter(Load.status == status_filter)
     if load_type:
         query = query.filter(Load.load_type == load_type)
@@ -582,14 +713,8 @@ def get_load_tracking(db: Session, user: User, load_id: int) -> dict:
 
 
 def list_my_loads(db: Session, user: User) -> list[Load]:
-    """Lista cargas do cliente autenticado."""
-    client = get_client_or_403(db, user)
-    return (
-        db.query(Load)
-        .filter(Load.client_id == client.id)
-        .order_by(Load.created_at.desc())
-        .all()
-    )
+    """Lista cargas ligadas ao utilizador autenticado (cliente, empresa ou motorista)."""
+    return list_related_loads(db, user)
 
 
 def update_load(db: Session, user: User, load_id: int, data: LoadUpdateRequest) -> LoadDetailResponse:

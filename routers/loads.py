@@ -149,6 +149,7 @@ def list_loads(
     """Lista cargas com filtros (pesquisa e Filtros do app)."""
     return list_available_loads(
         db,
+        current_user,
         status_filter=status,
         load_type=load_type,
         origin=origin,
@@ -164,7 +165,7 @@ def list_my_loads_route(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    """Lista cargas do cliente autenticado."""
+    """Lista cargas ligadas ao utilizador autenticado."""
     return list_my_loads(db, current_user)
 
 
@@ -186,7 +187,7 @@ def get_load(
     db: Session = Depends(get_db),
 ):
     """Detalhe completo: remetente, rota estimada, imagens."""
-    return get_load_detail_response(db, load_id)
+    return get_load_detail_response(db, load_id, current_user)
 
 
 @router.patch("/{load_id}", response_model=LoadDetailResponse)

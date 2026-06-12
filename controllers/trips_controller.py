@@ -257,7 +257,7 @@ def list_my_trips(db: Session, user: User) -> list[Trip]:
             .all()
         )
 
-    return db.query(Trip).order_by(Trip.created_at.desc()).all()
+    return []
 
 
 def start_trip(db: Session, user: User, trip_id: int, data: TripStartRequest) -> Trip:

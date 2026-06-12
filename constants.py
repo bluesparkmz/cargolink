@@ -7,11 +7,11 @@ LOAD_TYPES = [
     {"id": "areia", "label": "Areia", "image": "/static/load-types/areea.png"},
     {"id": "cimento", "label": "Cimento", "image": "/static/load-types/cimento.png"},
     {"id": "cascalho", "label": "Cascalho", "image": "/static/load-types/area.png"},
-    {"id": "combustivel", "label": "Combustível", "image": "/static/load-types/barotes.png"},
+    {"id": "combustivel", "label": "Combustível", "image": "/static/load-types/Asset_combustivel_qz_server.png"},
     {"id": "ferro", "label": "Ferro", "image": "/static/load-types/ferro.png"},
     {"id": "madeira", "label": "Madeira", "image": "/static/load-types/area.png"},
     {"id": "graos", "label": "Grãos", "image": "/static/load-types/area.png"},
-    {"id": "mercadoria_geral", "label": "Mercadoria geral", "image": "/static/load-types/cimento.png"},
+    {"id": "mercadoria_geral", "label": "Mercadoria geral", "image": "/static/load-types/Asset_geral_qz_server.png"},
     {"id": "outro", "label": "Outro", "icon": "ellipsis-horizontal"},
 ]
 
