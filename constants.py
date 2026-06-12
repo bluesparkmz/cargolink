@@ -19,6 +19,12 @@ LOAD_TYPE_IDS = {item["id"] for item in LOAD_TYPES}
 
 LOAD_TYPE_LABELS = {item["id"]: item["label"] for item in LOAD_TYPES}
 
+# Aliases aceites pelo app (normalizados para o id canonico)
+LOAD_TYPE_ALIASES = {
+    "mercadoria": "mercadoria_geral",
+    "mercadoria-geral": "mercadoria_geral",
+}
+
 # Carga completa / meia carga (badge no detalhe)
 LOAD_FILL_TYPES = [
     {"id": "completa", "label": "Carga completa"},

@@ -14,6 +14,7 @@ from controllers.loads_controller import (
     add_load_image,
     create_load,
     create_load_with_files,
+    normalize_load_type,
     create_proposal,
     delete_load,
     get_load_detail_response,
@@ -110,7 +111,7 @@ def publish_load(
 ):
     """Cliente publica carga com multipart/form-data (dropdowns + upload de imagens)."""
     form_data = LoadCreateRequestForm(
-        load_type=load_type,
+        load_type=normalize_load_type(load_type),
         load_name=load_name,
         description=description,
         weight=weight,

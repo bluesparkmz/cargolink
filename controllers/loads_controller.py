@@ -117,13 +117,22 @@ def _save_load_image(file: UploadFile) -> str:
     return f"/{LOAD_UPLOAD_DIR}/{filename}"
 
 
-def _validate_load_type(load_type: str) -> None:
-    """Valida tipo de carga contra catálogo do app."""
-    if load_type not in LOAD_TYPE_IDS:
+def normalize_load_type(load_type: str) -> str:
+    """Converte aliases legados para o id canonico do catalogo."""
+    from constants import LOAD_TYPE_ALIASES
+
+    return LOAD_TYPE_ALIASES.get(load_type.strip(), load_type.strip())
+
+
+def _validate_load_type(load_type: str) -> str:
+    """Valida tipo de carga contra catálogo do app e devolve o id canonico."""
+    normalized = normalize_load_type(load_type)
+    if normalized not in LOAD_TYPE_IDS:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=f"Tipo de carga inválido. Use um de: {', '.join(sorted(LOAD_TYPE_IDS))}",
         )
+    return normalized
 
 
 def _validate_weight_unit(weight_unit: str | None) -> None:
@@ -397,7 +406,7 @@ def _attach_images(db: Session, load: Load, images: list[LoadImageCreateRequest]
 def create_load(db: Session, user: User, data: LoadCreateRequest) -> LoadDetailResponse:
     """Cliente publica nova carga (com imagens opcionais no mesmo pedido)."""
     client = get_client_or_403(db, user)
-    _validate_load_type(data.load_type)
+    data.load_type = _validate_load_type(data.load_type)
     _validate_weight_unit(data.weight_unit)
     _validate_load_fill(data.load_fill)
 
@@ -432,7 +441,7 @@ def create_load_with_files(
 ) -> LoadDetailResponse:
     """Cliente publica nova carga via multipart/form-data com files de imagens."""
     client = get_client_or_403(db, user)
-    _validate_load_type(data.load_type)
+    data.load_type = _validate_load_type(data.load_type)
     _validate_weight_unit(data.weight_unit)
     _validate_load_fill(data.load_fill)
 
@@ -592,7 +601,7 @@ def update_load(db: Session, user: User, load_id: int, data: LoadUpdateRequest) 
 
     fields = data.model_dump(exclude_unset=True)
     if "load_type" in fields:
-        _validate_load_type(fields["load_type"])
+        fields["load_type"] = _validate_load_type(fields["load_type"])
     if "weight_unit" in fields:
         _validate_weight_unit(fields.get("weight_unit"))
     if "load_fill" in fields:
