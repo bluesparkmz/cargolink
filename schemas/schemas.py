@@ -351,7 +351,7 @@ class CompanyDriverCreateRequest(BaseModel):
     name: str = Field(..., min_length=2, max_length=150)
     email: EmailStr
     phone: str = Field(..., min_length=7, max_length=30)
-    license_number: str | None = Field(None, min_length=5, max_length=100)
+    license_number: str = Field(..., min_length=5, max_length=100, description="Número da carta de condução (obrigatório)")
     license_expiry: date | None = None
     years_experience: int = Field(0, ge=0)
 

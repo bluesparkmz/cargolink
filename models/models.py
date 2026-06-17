@@ -114,7 +114,7 @@ class Driver(Base):
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), unique=True)
     company_id: Mapped[int | None] = mapped_column(ForeignKey("companies.id", ondelete="SET NULL"))
-    license_number: Mapped[str | None] = mapped_column("numero_carta", String(100))
+    license_number: Mapped[str] = mapped_column("numero_carta", String(100), nullable=False)
     license_expiry: Mapped[date | None] = mapped_column("validade_carta", Date)
     years_experience: Mapped[int] = mapped_column("experiencia_anos", Integer, default=0)
     average_rating: Mapped[Decimal] = mapped_column("avaliacao_media", Numeric(3, 2), default=0)
