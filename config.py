@@ -24,6 +24,9 @@ class Settings:
     AUTO_CONFIRM_MPESA_DEPOSITS: bool
     STORAGE_DIR: str
     GOOGLE_CLIENT_IDS: list[str]
+    MPESA_HOST: str
+    MPESA_BEARER_TOKEN: str
+    MPESA_SERVICE_PROVIDER_CODE: str
 
 
 settings = Settings()
@@ -41,3 +44,11 @@ settings.GOOGLE_CLIENT_IDS = [
     ).split(",")
     if client_id.strip()
 ]
+
+# M-Pesa Sandbox Configuration
+settings.MPESA_HOST = os.getenv("MPESA_HOST", "https://api.sandbox.vm.co.mz")
+settings.MPESA_BEARER_TOKEN = os.getenv(
+    "MPESA_BEARER_TOKEN",
+    "UELjHuIUTK0VelJ68L4gx95py5nLmoMhCL0R2iL/Q7N0IOzqmDS/MD6vvfeb6koVeKlmZoY/ritM44pY7g4TQKhKNm/CI7UwWgwkENIAUlV0m6mhU8KaSVILG8mmJsk21wJEJxLjNJQnLDyn+hQfMh/DxEOv4ZCid0crCRFtC/H6FWR9aQHnfbTMsnZVreKWDWFGbElQzVFAFfLHocC5Z+vv1ehY5uF92nUFuI7jnCHEsTsXWTpaa8BgXA93Qv/dVpyoCBM3fonCJ1OioIV04A3lkseuWX+6CpOnQVoHl/bKYlNwjd7yArRI7xlwWtbxt7Wz+RNJZDd1gzP2LnyXY++8z/naZ/sPTx56wHweYHJoeiveeKwWMUZ9k6pgF8Ka+ejRjl9U04AZQ4MFmabXKvf6sP+/ZHtcoGrQK7e9H9L5rzGtfp2fdCVRt/KpxHqfYGJWhpstmvAEQfsV+hPbVER4GSO3Rf+a+ECbaWbp7dBbOCkYXbb9dpvcAeZd6ACF4y8o9ClUPm1o3gOq1h9dB7jKbL4TAyBC1pTmtAefnTHv3gj2z0iRDquuDI7cMrcoL/3IEesYBouuR849/QA91Vo+M7YRdHjOnDys/5oYyVlMXPpm3bMxprS+hwiyfHlRNiA6rIGyJZNpuFummIgjmSb90bczaWmAz7WsOSYqZ4g=",
+)
+settings.MPESA_SERVICE_PROVIDER_CODE = os.getenv("MPESA_SERVICE_PROVIDER_CODE", "171717")

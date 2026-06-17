@@ -10,6 +10,7 @@ from controllers.wallet_controller import (
     create_deposit,
     get_wallet_balance,
     list_wallet_transactions,
+    process_mpesa_callback,
 )
 from database import get_db
 from deps import get_current_user
@@ -79,3 +80,14 @@ def get_balance(
         pending_balance=float(wallet.pending_balance),
         blocked_balance=float(wallet.blocked_balance),
     )
+
+
+@router.post("/mpesa-callback")
+def mpesa_callback(payload: dict):
+    """
+    Webhook para receber callbacks de pagamentos M-Pesa.
+    Chamado pelo servidor Mpesa após confirmação/rejeição do pagamento.
+    Não requer autenticação (chamado por sistema externo).
+    """
+    result = process_mpesa_callback(payload)
+    return result

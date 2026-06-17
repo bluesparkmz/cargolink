@@ -49,6 +49,7 @@ class User(Base):
     driver: Mapped[Driver | None] = relationship(back_populates="user", uselist=False)
     documents: Mapped[list[Document]] = relationship(back_populates="user")
     notifications: Mapped[list[Notification]] = relationship(back_populates="user")
+    payments: Mapped[list["Payment"]] = relationship(back_populates="user")
 
 
 # ---------------------------------------------------------------------------
@@ -429,6 +430,7 @@ class Payment(Base):
     gateway_response: Mapped[dict | None] = mapped_column("resposta_gateway", JSONB)
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
 
+    user: Mapped[User | None] = relationship(back_populates="payments")
     load: Mapped[Load | None] = relationship(back_populates="payments")
 
 

@@ -52,8 +52,8 @@ def decode_token(token: str) -> dict | None:
 def generate_random_password(length: int = 12) -> str:
     """
     Gera uma senha aleatória segura.
-    Inclui letras maiúsculas, minúsculas, dígitos e símbolos.
+    Inclui letras maiúsculas, minúsculas e dígitos (sem símbolos).
     """
-    characters = string.ascii_letters + string.digits + string.punctuation
+    characters = string.ascii_letters + string.digits
     password = ''.join(secrets.choice(characters) for _ in range(length))
     return password
