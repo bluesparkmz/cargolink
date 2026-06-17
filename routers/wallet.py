@@ -49,13 +49,13 @@ def get_transactions(
 
 
 @router.post("/deposits", response_model=WalletDepositResponse, status_code=201)
-def request_deposit(
+async def request_deposit(
     data: WalletDepositRequest,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
     """Inicia depósito na carteira via M-Pesa (botão + no app)."""
-    return create_deposit(db, current_user, data)
+    return await create_deposit(db, current_user, data)
 
 
 @router.post("/deposits/{payment_id}/confirm", response_model=WalletDepositResponse)

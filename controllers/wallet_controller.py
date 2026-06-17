@@ -1,6 +1,5 @@
 import logging
 import uuid
-import time
 from decimal import Decimal
 
 from fastapi import HTTPException, status
@@ -83,19 +82,22 @@ def _complete_deposit(
         raise
 
 
-def create_deposit(db: Session, user: User, data: WalletDepositRequest) -> dict:
+async def create_deposit(db: Session, user: User, data: WalletDepositRequest) -> dict:
     """
-    Inicia depósito M-Pesa: faz requisição ao Mpesa, regista pagamento e movimento.
-    Em prod, aguarda callback do Mpesa. Em dev (AUTO_CONFIRM_MPESA_DEPOSITS), 
-    simula confirmação automática.
+    Inicia depósito M-Pesa sem polling bloqueante.
+    
+    Fluxo:
+    1. Cria registros de pagamento e transação como PENDING
+    2. Envia requisição ao M-Pesa (assincronamente)
+    3. Se aceito (INS-0), retorna imediatamente com status PENDING
+    4. Callback do M-Pesa confirma o depósito automaticamente
     """
     wallet = get_or_create_wallet(db, user)
     phone = (data.phone or user.phone).strip()
     amount = Decimal(str(data.amount))
     
-    # Gera referências únicas para a transação
+    # Gera referências únicas
     transaction_ref = f"T{uuid.uuid4().hex[:12].upper()}"
-    third_party_ref = uuid.uuid4().hex[:6].upper()
     external_reference = f"MPESA-{uuid.uuid4().hex[:12].upper()}"
 
     # Cria registro de pagamento (será atualizado com resposta do Mpesa)
@@ -122,167 +124,93 @@ def create_deposit(db: Session, user: User, data: WalletDepositRequest) -> dict:
     db.add(transaction)
     db.flush()
 
-    message = "Depósito registado. Aguarde confirmação M-Pesa no telemóvel."
-    final_status = PAYMENT_STATUS_PENDING
-
     # Em desenvolvimento, simula confirmação automática
     if settings.AUTO_CONFIRM_MPESA_DEPOSITS:
         logger.info(f"Auto-confirming M-Pesa deposit for {user.id} (dev mode)")
         _complete_deposit(db, wallet, payment, transaction)
-        db.refresh(payment)
-        db.refresh(transaction)
-        db.refresh(wallet)
-        message = "Depósito confirmado (modo desenvolvimento). Saldo atualizado."
-        final_status = PAYMENT_STATUS_COMPLETED
-    else:
-        # Em produção, faz requisição ao Mpesa com polling
-        try:
-            logger.info(
-                f"Initiating M-Pesa payment for user {user.id}: "
-                f"phone={phone}, amount={amount}"
-            )
-            mpesa_response = mpesa_client.initiate_payment(
-                transaction_reference=transaction_ref,
-                customer_msisdn=phone,
-                amount=float(amount),
-                third_party_reference=third_party_ref,
-            )
-            
-            # Armazena resposta do Mpesa no pagamento
-            payment.gateway_response = mpesa_response
-            db.commit()
-            
-            # Verifica se a resposta do M-Pesa foi aceita (INS0 ou INS-0)
-            response_code = mpesa_response.get("output_ResponseCode", "")
-            if response_code not in ("INS0", "INS-0"):
-                # M-Pesa rejeitou a requisição
-                error_msg = mpesa_response.get("output_ResponseDesc", "Erro desconhecido")
-                logger.error(f"M-Pesa rejected payment: {error_msg}")
-                payment.status = PAYMENT_STATUS_FAILED
-                transaction.status = "failed"
-                db.commit()
-                message = f"Erro: {error_msg}"
-            else:
-                # M-Pesa aceitou. Agora faz polling para verificar PIN
-                logger.info(
-                    f"M-Pesa accepted payment (INS0). Starting polling... "
-                    f"(payment_id={payment.id})"
-                )
-                
-                # Extrai ConversationID ou TransactionID para queries
-                query_ref = (
-                    mpesa_response.get("output_TransactionID")
-                    or mpesa_response.get("output_ConversationID")
-                    or transaction_ref
-                )
-                
-                # Polling: 10 tentativas, 6 segundos de intervalo (até 60 segundos)
-                max_retries = 10
-                poll_interval = 6
-                failed_queries = 0
-                payment_confirmed = False
-                
-                for attempt in range(max_retries):
-                    time.sleep(poll_interval)
-                    logger.debug(f"Poll attempt {attempt + 1}/{max_retries}")
-                    
-                    # Consulta status no M-Pesa
-                    status_result = mpesa_client.query_payment_status(
-                        transaction_id=query_ref,
-                        third_party_reference=third_party_ref,
-                    )
-                    
-                    if status_result["success"]:
-                        status_desc = (status_result.get("transaction_status") or "").lower()
-                        resp_code = status_result.get("response_code", "")
-                        
-                        logger.info(
-                            f"Poll result: code={resp_code}, status={status_desc}"
-                        )
-                        
-                        # Verifica se foi confirmado (procura palavras-chave)
-                        if resp_code == "INS-0" and any(
-                            kw in status_desc
-                            for kw in ["success", "completed", "done", "pago", 
-                                      "sucesso", "concluido", "concluído"]
-                        ):
-                            # ✅ PIN foi confirmado! Credita saldo
-                            logger.info(
-                                f"M-Pesa confirmed payment {payment.id}. Crediting..."
-                            )
-                            _complete_deposit(db, wallet, payment, transaction)
-                            payment_confirmed = True
-                            message = "Depósito confirmado. Saldo atualizado."
-                            break
-                        
-                        # Verifica se foi rejeitado
-                        if any(
-                            kw in status_desc
-                            for kw in ["fail", "cancel", "reject", "error", "expired",
-                                      "falha", "cancelado", "rejeitado"]
-                        ):
-                            # ❌ M-Pesa rejeitou
-                            logger.warning(
-                                f"M-Pesa rejected payment {payment.id}: {status_desc}"
-                            )
-                            payment.status = PAYMENT_STATUS_FAILED
-                            transaction.status = "failed"
-                            payment.gateway_response = {
-                                **payment.gateway_response,
-                                "mpesa_status": status_result,
-                            }
-                            db.commit()
-                            message = f"Pagamento rejeitado: {status_desc}"
-                            break
-                    else:
-                        # Query falhou
-                        failed_queries += 1
-                        logger.warning(
-                            f"Poll query failed ({failed_queries}/3): "
-                            f"{status_result.get('message')}"
-                        )
-                        if failed_queries >= 3:
-                            # Muitas falhas de query, sair do loop
-                            logger.error("Too many failed queries, stopping polling")
-                            break
-                
-                # Se não foi confirmado, fica como pendente
-                if not payment_confirmed and payment.status == PAYMENT_STATUS_PENDING:
-                    message = (
-                        "Depósito aguardando confirmação. "
-                        "Você receberá um SMS com um código para confirmar."
-                    )
-                    logger.info(
-                        f"Polling completed without confirmation for payment {payment.id}. "
-                        "Waiting for callback..."
-                    )
-                
-                db.refresh(payment)
-                db.refresh(transaction)
-                
-        except Exception as e:
-            logger.error(f"M-Pesa deposit error: {str(e)}", exc_info=True)
-            # Marca como falhe caso erro na integração
+        return {
+            "payment_id": payment.id,
+            "transaction_id": transaction.id,
+            "amount": float(amount),
+            "status": PAYMENT_STATUS_COMPLETED,
+            "external_reference": external_reference,
+            "phone": phone,
+            "message": "Depósito confirmado (modo desenvolvimento). Saldo atualizado.",
+        }
+
+    # ========== PRODUÇÃO: Requisição ao M-Pesa (ASSÍNCRONA) ==========
+    try:
+        logger.info(f"M-Pesa C2B request: phone={phone}, amount={amount}, ref={transaction_ref}")
+        
+        mpesa_response = await mpesa_client.initiate_payment_async(
+            transaction_reference=transaction_ref,
+            customer_msisdn=phone,
+            amount=float(amount),
+            third_party_reference=external_reference,
+        )
+        
+        payment.gateway_response = mpesa_response
+        db.commit()
+        
+        # Verifica resposta do M-Pesa
+        response_code = mpesa_response.get("output_ResponseCode", "").upper()
+        response_desc = mpesa_response.get("output_ResponseDesc", "")
+        
+        logger.info(f"M-Pesa C2B response: code={response_code}, desc={response_desc}")
+        
+        # Se não foi aceito, marca como falha
+        if response_code not in ("INS0", "INS-0"):
             payment.status = PAYMENT_STATUS_FAILED
             transaction.status = "failed"
-            payment.gateway_response = {"error": str(e)}
             db.commit()
-            message = f"Erro ao processar depósito: {str(e)}"
-
-    return {
-        "payment_id": payment.id,
-        "transaction_id": transaction.id,
-        "amount": float(amount),
-        "status": payment.status,
-        "external_reference": external_reference,
-        "phone": phone,
-        "message": message,
-    }
+            logger.warning(f"M-Pesa rejected payment {payment.id}: {response_desc}")
+            return {
+                "payment_id": payment.id,
+                "transaction_id": transaction.id,
+                "amount": float(amount),
+                "status": PAYMENT_STATUS_FAILED,
+                "external_reference": external_reference,
+                "phone": phone,
+                "message": f"M-Pesa rejeitou: {response_desc}",
+            }
+        
+        # ========== INS-0 ACEITO: Retorna PENDING (callback virá depois) ==========
+        logger.info(f"M-Pesa accepted (INS-0). Waiting for callback: payment_id={payment.id}")
+        
+        return {
+            "payment_id": payment.id,
+            "transaction_id": transaction.id,
+            "amount": float(amount),
+            "status": PAYMENT_STATUS_PENDING,
+            "external_reference": external_reference,
+            "phone": phone,
+            "message": (
+                "Depósito iniciado. Confirme no seu telemóvel para completar. "
+                "Receberá SMS com código de confirmação."
+            ),
+        }
+        
+    except Exception as e:
+        logger.error(f"Unexpected error in create_deposit: {str(e)}", exc_info=True)
+        payment.status = PAYMENT_STATUS_FAILED
+        transaction.status = "failed"
+        payment.gateway_response = {"error": str(e)}
+        db.commit()
+        return {
+            "payment_id": payment.id,
+            "transaction_id": transaction.id,
+            "amount": float(amount),
+            "status": PAYMENT_STATUS_FAILED,
+            "external_reference": external_reference,
+            "phone": phone,
+            "message": f"Erro ao processar depósito: {str(e)}",
+        }
 
 
 def confirm_deposit(db: Session, user: User, payment_id: int) -> dict:
     """
-    Confirma depósito pendente (callback M-Pesa ou teste manual).
+    Confirma depósito pendente manualmente (para testes ou confirmação manual).
+    Em produção, o callback do M-Pesa fará isso automaticamente.
     Só o dono do pagamento pode confirmar.
     """
     payment = db.query(Payment).filter(Payment.id == payment_id).first()
@@ -323,21 +251,13 @@ def confirm_deposit(db: Session, user: User, payment_id: int) -> dict:
 
     _complete_deposit(db, wallet, payment, transaction)
     
-    # Evita lazy loading - extrai valores antes de trabalhar com refresh
-    payment_id_val = payment.id
-    amount_val = float(payment.amount)
-    status_val = payment.status
-    ext_ref_val = payment.external_reference or ""
-    phone_val = payment.phone or user.phone
-    transaction_id_val = transaction.id
-
     return {
-        "payment_id": payment_id_val,
-        "transaction_id": transaction_id_val,
-        "amount": amount_val,
-        "status": status_val,
-        "external_reference": ext_ref_val,
-        "phone": phone_val,
+        "payment_id": payment.id,
+        "transaction_id": transaction.id,
+        "amount": float(payment.amount),
+        "status": payment.status,
+        "external_reference": payment.external_reference or "",
+        "phone": payment.phone or user.phone,
         "message": "Depósito confirmado. Saldo atualizado.",
     }
 
@@ -346,13 +266,18 @@ def process_mpesa_callback(payload: dict) -> dict:
     """
     Processa callback do M-Pesa após pagamento confirmado.
     
+    Este é o ponto onde M-Pesa notifica que o utilizador confirmou o pagamento.
+    
     Esperado no payload:
     - output_ConversationID: ID da conversa
     - output_ResponseCode: Código de resposta (INS0 = sucesso)
     - output_ResponseDesc: Descrição da resposta
-    - input_ThirdPartyReference: Ref original que usamos para encontrar payment
+    - input_ThirdPartyReference: Nossa referência externa (external_reference)
     
-    Returns resultado do processamento.
+    Fluxo:
+    1. Localiza o pagamento pela external_reference
+    2. Se sucesso (INS0), credita o saldo
+    3. Se falha, marca como failed
     """
     from database import SessionLocal
     
@@ -360,7 +285,7 @@ def process_mpesa_callback(payload: dict) -> dict:
     try:
         # Extrai info do callback
         conversation_id = payload.get("output_ConversationID", "")
-        response_code = payload.get("output_ResponseCode", "")
+        response_code = payload.get("output_ResponseCode", "").upper()
         response_desc = payload.get("output_ResponseDesc", "")
         third_party_ref = payload.get("input_ThirdPartyReference", "")
         
@@ -369,8 +294,6 @@ def process_mpesa_callback(payload: dict) -> dict:
             f"code={response_code}, ref={third_party_ref}"
         )
         
-        # Encontra pagamento pela referência externa (que armazenamos)
-        # O callback do M-Pesa deve incluir nossa external_reference para localizar o pagamento
         if not third_party_ref:
             logger.error("M-Pesa callback missing input_ThirdPartyReference")
             return {
@@ -378,48 +301,37 @@ def process_mpesa_callback(payload: dict) -> dict:
                 "message": "Referência do M-Pesa ausente no callback",
             }
         
-        # Tenta buscar por external_reference (nossa referência única armazenada)
-        # Assumindo que o M-Pesa ecoa nossa external_reference no callback
+        # Localiza o pagamento pela nossa external_reference
         payment = (
             db.query(Payment)
             .filter(Payment.external_reference == third_party_ref)
             .first()
         )
         
-        # Se não encontrar, tenta procurar por qualquer pagamento pendente recente
-        # com o método M-Pesa e o telefone do callback
         if payment is None:
-            logger.warning(
-                f"Payment not found for reference: {third_party_ref}. "
-                "Searching by phone and recent status..."
-            )
-            # Esta é uma fallback - idealmente o callback teria a referência correta
+            logger.warning(f"Payment not found for reference: {third_party_ref}")
             return {
                 "status": "error",
                 "message": "Pagamento não encontrado com referência fornecida",
             }
         
-        # Verifica se é sucesso
+        # Se pagamento já foi processado, ignora callback duplicado
+        if payment.status in (PAYMENT_STATUS_COMPLETED, PAYMENT_STATUS_FAILED):
+            logger.info(
+                f"Payment {payment.id} already processed (status: {payment.status}). "
+                "Ignoring duplicate callback."
+            )
+            return {
+                "status": "ignored",
+                "message": f"Pagamento já foi processado com status: {payment.status}",
+            }
+        
+        # ========== Sucesso: INS0 ==========
         if response_code == "INS0":
-            # Validação: pagamento deve estar pendente
-            if payment.status != PAYMENT_STATUS_PENDING:
-                logger.warning(
-                    f"Payment {payment.id} is not pending (status: {payment.status}). "
-                    "Ignoring callback."
-                )
-                return {
-                    "status": "error",
-                    "message": f"Pagamento não está pendente (status: {payment.status})",
-                }
-            
-            # Busca user_id primeiro para evitar lazy load
             user_id = payment.user_id
-            wallet = db.query(Wallet).filter(Wallet.user_id == user_id).first()
-            if wallet is None:
-                wallet = Wallet(user_id=user_id)
-                db.add(wallet)
-                db.flush()
+            wallet = get_or_create_wallet(db, user_id)
             
+            # Localiza a transação pendente
             transaction = (
                 db.query(Transaction)
                 .filter(
@@ -429,24 +341,29 @@ def process_mpesa_callback(payload: dict) -> dict:
                 .first()
             )
             
-            if transaction:
-                _complete_deposit(db, wallet, payment, transaction)
-                # Extrai valores antes de fechar a sessão
-                payment_id_val = payment.id
-                logger.info(f"Deposit confirmed for user {user_id}: {payment_id_val}")
-                return {
-                    "status": "success",
-                    "message": "Depósito confirmado",
-                    "payment_id": payment_id_val,
-                }
-            else:
+            if not transaction:
                 logger.error(f"Transaction not found for payment {payment.id}")
+                payment.status = PAYMENT_STATUS_FAILED
+                payment.gateway_response = payload
+                db.commit()
                 return {
                     "status": "error",
                     "message": "Movimento não encontrado",
                 }
+            
+            # Credita o saldo
+            _complete_deposit(db, wallet, payment, transaction)
+            payment_id_val = payment.id
+            
+            logger.info(f"✅ Deposit confirmed via M-Pesa callback: payment_id={payment_id_val}, amount={payment.amount}")
+            return {
+                "status": "success",
+                "message": "Depósito confirmado",
+                "payment_id": payment_id_val,
+            }
+        
+        # ========== Falha: Código diferente de INS0 ==========
         else:
-            # M-Pesa rejeitou o pagamento
             payment.status = PAYMENT_STATUS_FAILED
             payment.gateway_response = payload
             
@@ -461,15 +378,17 @@ def process_mpesa_callback(payload: dict) -> dict:
             
             db.commit()
             logger.warning(
-                f"M-Pesa payment rejected for payment {payment.id}: {response_desc}"
+                f"❌ M-Pesa payment rejected: payment_id={payment.id}, "
+                f"code={response_code}, desc={response_desc}"
             )
             return {
                 "status": "failed",
                 "message": f"Pagamento rejeitado: {response_desc}",
                 "payment_id": payment.id,
             }
+            
     except Exception as e:
-        logger.error(f"Error processing M-Pesa callback: {str(e)}")
+        logger.error(f"Error processing M-Pesa callback: {str(e)}", exc_info=True)
         return {
             "status": "error",
             "message": f"Erro ao processar callback: {str(e)}",

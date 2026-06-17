@@ -2,11 +2,11 @@
 Cliente HTTP para integração com M-Pesa API (Sandbox).
 """
 
+import asyncio
 import logging
-import time
 from typing import Any
 
-import requests
+import httpx
 from fastapi import HTTPException, status
 
 from config import settings
@@ -15,7 +15,7 @@ logger = logging.getLogger(__name__)
 
 
 class MpesaClient:
-    """Cliente para fazer requisições à API M-Pesa."""
+    """Cliente para fazer requisições à API M-Pesa (suporta síncrono e assíncrono)."""
 
     def __init__(self):
         self.base_url = settings.MPESA_HOST
@@ -31,7 +31,7 @@ class MpesaClient:
             "Origin": "developer.mpesa.vm.co.mz",
         }
 
-    def initiate_payment(
+    async def initiate_payment_async(
         self,
         transaction_reference: str,
         customer_msisdn: str,
@@ -39,7 +39,7 @@ class MpesaClient:
         third_party_reference: str,
     ) -> dict[str, Any]:
         """
-        Inicia pagamento C2B (Customer-to-Business) via M-Pesa.
+        Inicia pagamento C2B (Customer-to-Business) via M-Pesa - ASSÍNCRONO.
 
         Args:
             transaction_reference: Referência única da transação (ex: T12344C)
@@ -49,9 +49,6 @@ class MpesaClient:
 
         Returns:
             Resposta da API M-Pesa com confirmação ou erro.
-
-        Raises:
-            HTTPException se a requisição falhar.
         """
         url = f"{self.base_url}/ipg/v1x/c2bPayment/singleStage/"
 
@@ -65,31 +62,74 @@ class MpesaClient:
 
         try:
             logger.info(
-                f"M-Pesa payment request: {transaction_reference} "
+                f"M-Pesa payment request (async): {transaction_reference} "
                 f"for {customer_msisdn} (MT {amount})"
             )
-            response = requests.post(
-                url,
-                json=payload,
-                headers=self._get_headers(),
-                timeout=30,
-            )
+            
+            async with httpx.AsyncClient(timeout=30) as client:
+                response = await client.post(
+                    url,
+                    json=payload,
+                    headers=self._get_headers(),
+                )
+            
             response.raise_for_status()
             result = response.json()
             logger.info(f"M-Pesa response: {result}")
             return result
-        except requests.exceptions.RequestException as e:
+            
+        except httpx.RequestError as e:
             logger.error(f"M-Pesa API error: {str(e)}")
-            raise HTTPException(
-                status_code=status.HTTP_502_BAD_GATEWAY,
-                detail=f"Erro na integração com M-Pesa: {str(e)}",
-            )
+            return {
+                "success": False,
+                "status": "failed",
+                "message": f"Erro na integração com M-Pesa: {str(e)}",
+            }
         except ValueError as e:
             logger.error(f"M-Pesa JSON error: {str(e)}")
-            raise HTTPException(
-                status_code=status.HTTP_502_BAD_GATEWAY,
-                detail="Resposta inválida do M-Pesa",
-            )
+            return {
+                "success": False,
+                "status": "failed",
+                "message": "Resposta inválida do M-Pesa",
+            }
+
+    def initiate_payment(
+        self,
+        transaction_reference: str,
+        customer_msisdn: str,
+        amount: float,
+        third_party_reference: str,
+    ) -> dict[str, Any]:
+        """
+        Wrapper síncrono para `initiate_payment_async`.
+        Use em contextos síncronos ou quando não puder usar async/await.
+        """
+        try:
+            # Tenta rodar assíncrono se houver event loop ativo
+            loop = asyncio.get_event_loop()
+            if loop.is_running():
+                # Em FastAPI async, não pode usar get_event_loop().run_until_complete()
+                # Vai retornar erro. Use initiate_payment_async() diretamente!
+                logger.warning("Usando initiate_payment() síncrono em contexto async!")
+                return {
+                    "success": False,
+                    "status": "failed",
+                    "message": "Use initiate_payment_async() em rotas async",
+                }
+            return asyncio.run(self.initiate_payment_async(
+                transaction_reference,
+                customer_msisdn,
+                amount,
+                third_party_reference,
+            ))
+        except RuntimeError:
+            # Sem event loop
+            return asyncio.run(self.initiate_payment_async(
+                transaction_reference,
+                customer_msisdn,
+                amount,
+                third_party_reference,
+            ))
 
     def query_payment_status(
         self,
