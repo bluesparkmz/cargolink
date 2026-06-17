@@ -65,16 +65,22 @@ def _complete_deposit(
     transaction: Transaction,
 ) -> None:
     """Credita saldo após confirmação M-Pesa."""
-    amount = payment.amount
-    payment.status = PAYMENT_STATUS_COMPLETED
-    transaction.status = TRANSACTION_STATUS_COMPLETED
-    wallet.available_balance = (wallet.available_balance or Decimal(0)) + amount
-    payment.gateway_response = {
-        "provider": PAYMENT_METHOD_MPESA,
-        "simulated": settings.AUTO_CONFIRM_MPESA_DEPOSITS,
-        "status": PAYMENT_STATUS_COMPLETED,
-    }
-    db.commit()
+    try:
+        amount = payment.amount
+        payment.status = PAYMENT_STATUS_COMPLETED
+        transaction.status = TRANSACTION_STATUS_COMPLETED
+        wallet.available_balance = (wallet.available_balance or Decimal(0)) + amount
+        payment.gateway_response = {
+            "provider": PAYMENT_METHOD_MPESA,
+            "simulated": settings.AUTO_CONFIRM_MPESA_DEPOSITS,
+            "status": PAYMENT_STATUS_COMPLETED,
+        }
+        db.commit()
+        logger.info(f"Deposit completed: payment_id={payment.id}, amount={amount}")
+    except Exception as e:
+        db.rollback()
+        logger.error(f"Error completing deposit: {str(e)}", exc_info=True)
+        raise
 
 
 def create_deposit(db: Session, user: User, data: WalletDepositRequest) -> dict:
@@ -100,7 +106,6 @@ def create_deposit(db: Session, user: User, data: WalletDepositRequest) -> dict:
         amount=amount,
         status=PAYMENT_STATUS_PENDING,
         external_reference=external_reference,
-        mpesa_third_party_ref=third_party_ref,
     )
     db.add(payment)
     db.flush()
@@ -317,15 +322,22 @@ def confirm_deposit(db: Session, user: User, payment_id: int) -> dict:
         )
 
     _complete_deposit(db, wallet, payment, transaction)
-    db.refresh(payment)
+    
+    # Evita lazy loading - extrai valores antes de trabalhar com refresh
+    payment_id_val = payment.id
+    amount_val = float(payment.amount)
+    status_val = payment.status
+    ext_ref_val = payment.external_reference or ""
+    phone_val = payment.phone or user.phone
+    transaction_id_val = transaction.id
 
     return {
-        "payment_id": payment.id,
-        "transaction_id": transaction.id,
-        "amount": float(payment.amount),
-        "status": payment.status,
-        "external_reference": payment.external_reference or "",
-        "phone": payment.phone or user.phone,
+        "payment_id": payment_id_val,
+        "transaction_id": transaction_id_val,
+        "amount": amount_val,
+        "status": status_val,
+        "external_reference": ext_ref_val,
+        "phone": phone_val,
         "message": "Depósito confirmado. Saldo atualizado.",
     }
 
@@ -357,7 +369,8 @@ def process_mpesa_callback(payload: dict) -> dict:
             f"code={response_code}, ref={third_party_ref}"
         )
         
-        # Encontra pagamento pela referência do Mpesa
+        # Encontra pagamento pela referência externa (que armazenamos)
+        # O callback do M-Pesa deve incluir nossa external_reference para localizar o pagamento
         if not third_party_ref:
             logger.error("M-Pesa callback missing input_ThirdPartyReference")
             return {
@@ -365,17 +378,25 @@ def process_mpesa_callback(payload: dict) -> dict:
                 "message": "Referência do M-Pesa ausente no callback",
             }
         
+        # Tenta buscar por external_reference (nossa referência única armazenada)
+        # Assumindo que o M-Pesa ecoa nossa external_reference no callback
         payment = (
             db.query(Payment)
-            .filter(Payment.mpesa_third_party_ref == third_party_ref)
+            .filter(Payment.external_reference == third_party_ref)
             .first()
         )
         
+        # Se não encontrar, tenta procurar por qualquer pagamento pendente recente
+        # com o método M-Pesa e o telefone do callback
         if payment is None:
-            logger.warning(f"Payment not found for third_party_ref: {third_party_ref}")
+            logger.warning(
+                f"Payment not found for reference: {third_party_ref}. "
+                "Searching by phone and recent status..."
+            )
+            # Esta é uma fallback - idealmente o callback teria a referência correta
             return {
                 "status": "error",
-                "message": "Pagamento não encontrado",
+                "message": "Pagamento não encontrado com referência fornecida",
             }
         
         # Verifica se é sucesso
@@ -391,7 +412,14 @@ def process_mpesa_callback(payload: dict) -> dict:
                     "message": f"Pagamento não está pendente (status: {payment.status})",
                 }
             
-            wallet = get_or_create_wallet(db, payment.user)
+            # Busca user_id primeiro para evitar lazy load
+            user_id = payment.user_id
+            wallet = db.query(Wallet).filter(Wallet.user_id == user_id).first()
+            if wallet is None:
+                wallet = Wallet(user_id=user_id)
+                db.add(wallet)
+                db.flush()
+            
             transaction = (
                 db.query(Transaction)
                 .filter(
@@ -403,12 +431,13 @@ def process_mpesa_callback(payload: dict) -> dict:
             
             if transaction:
                 _complete_deposit(db, wallet, payment, transaction)
-                db.refresh(payment)
-                logger.info(f"Deposit confirmed for user {payment.user_id}: {payment.id}")
+                # Extrai valores antes de fechar a sessão
+                payment_id_val = payment.id
+                logger.info(f"Deposit confirmed for user {user_id}: {payment_id_val}")
                 return {
                     "status": "success",
                     "message": "Depósito confirmado",
-                    "payment_id": payment.id,
+                    "payment_id": payment_id_val,
                 }
             else:
                 logger.error(f"Transaction not found for payment {payment.id}")

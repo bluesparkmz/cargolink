@@ -427,7 +427,6 @@ class Payment(Base):
     amount: Mapped[Decimal] = mapped_column("valor", Numeric(12, 2), nullable=False)
     status: Mapped[str] = mapped_column(String(30), default="pendente")
     external_reference: Mapped[str | None] = mapped_column("referencia_externa", String(100))
-    mpesa_third_party_ref: Mapped[str | None] = mapped_column("mpesa_third_party_ref", String(50))
     gateway_response: Mapped[dict | None] = mapped_column("resposta_gateway", JSONB)
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
 
