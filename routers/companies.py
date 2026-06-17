@@ -8,6 +8,7 @@ from sqlalchemy.orm import Session
 
 from controllers.companies_controller import (
     attach_driver_to_company,
+    create_driver_for_company,
     detach_driver_from_company,
     detach_driver_from_company_by_email,
     get_company_by_id,
@@ -24,6 +25,8 @@ from models.models import Company, Driver, LoadProposal, User
 from schemas.schemas import (
     CompanyDetailResponse,
     CompanyDriverAttachRequest,
+    CompanyDriverCreateRequest,
+    CompanyDriverCreateResponse,
     CompanyListItem,
     CompanyProfileUpdateRequest,
     DriverListItem,
@@ -137,6 +140,37 @@ def attach_driver(
     """Associa motorista existente a empresa pelo email de login."""
     driver = attach_driver_to_company(db, current_user, str(data.email))
     return _driver_to_list_item(driver)
+
+
+@router.post("/me/drivers/create", response_model=CompanyDriverCreateResponse)
+def create_driver(
+    data: CompanyDriverCreateRequest,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Cria novo motorista e o associa à empresa autenticada."""
+    driver, temporary_password = create_driver_for_company(
+        db,
+        current_user,
+        name=data.name,
+        email=data.email,
+        phone=data.phone,
+        license_number=data.license_number,
+        license_expiry=data.license_expiry,
+        years_experience=data.years_experience,
+    )
+    return CompanyDriverCreateResponse(
+        id=driver.id,
+        user_id=driver.user_id,
+        name=driver.user.name,
+        email=driver.user.email,
+        phone=driver.user.phone,
+        company_id=driver.company_id,
+        temporary_password=temporary_password,
+        average_rating=float(driver.average_rating),
+        total_trips=driver.total_trips,
+        available=driver.available,
+    )
 
 
 @router.delete("/me/drivers", status_code=204)

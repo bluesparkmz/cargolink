@@ -1,5 +1,5 @@
 """
-Constantes da aplicação CargoLink.
+Constantes da aplicação Fretix.
 """
 
 # Tipos de carga (ecrã "Cadastrar nova carga")

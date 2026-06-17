@@ -8,6 +8,7 @@ from sqlalchemy.orm import Session, joinedload
 
 from models.models import Company, Driver, LoadProposal, Trip, User
 from schemas.schemas import CompanyProfileUpdateRequest
+from security import generate_random_password, hash_password
 
 
 def require_company(user: User) -> None:
@@ -177,4 +178,74 @@ def list_company_trips(db: Session, user: User) -> list[Trip]:
         .filter(Trip.company_id == company.id)
         .order_by(Trip.created_at.desc())
         .all()
+    )
+
+
+def create_driver_for_company(
+    db: Session,
+    user: User,
+    name: str,
+    email: str,
+    phone: str,
+    license_number: str | None = None,
+    license_expiry = None,
+    years_experience: int = 0,
+) -> tuple[Driver, str]:
+    """
+    Cria novo motorista e o associa à empresa autenticada.
+    Retorna tupla: (driver, temporary_password)
+    """
+    company = get_my_company(db, user)
+    
+    # Verifica se email já existe
+    existing_user = db.query(User).filter(func.lower(User.email) == func.lower(email)).first()
+    if existing_user:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Email já registado no sistema",
+        )
+    
+    # Verifica se telefone já existe
+    existing_phone = db.query(User).filter(func.lower(User.phone) == func.lower(phone)).first()
+    if existing_phone:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Telefone já registado no sistema",
+        )
+    
+    # Gera senha temporária
+    temporary_password = generate_random_password(12)
+    password_hash = hash_password(temporary_password)
+    
+    # Cria novo utilizador tipo motorista
+    new_user = User(
+        name=name,
+        email=email.lower(),
+        phone=phone,
+        password_hash=password_hash,
+        user_type="motorista",
+        status="ativo",
+        verified=False,
+    )
+    db.add(new_user)
+    db.flush()  # Força a geração do ID
+    
+    # Cria perfil de motorista
+    new_driver = Driver(
+        user_id=new_user.id,
+        company_id=company.id,
+        license_number=license_number,
+        license_expiry=license_expiry,
+        years_experience=years_experience,
+    )
+    db.add(new_driver)
+    db.commit()
+    db.refresh(new_driver)
+    
+    return (
+        db.query(Driver)
+        .options(joinedload(Driver.user))
+        .filter(Driver.id == new_driver.id)
+        .first(),
+        temporary_password,
     )

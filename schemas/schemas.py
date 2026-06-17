@@ -345,6 +345,34 @@ class CompanyDriverAttachRequest(BaseModel):
     email: EmailStr
 
 
+class CompanyDriverCreateRequest(BaseModel):
+    """Criar novo motorista e associá-lo à empresa autenticada."""
+
+    name: str = Field(..., min_length=2, max_length=150)
+    email: EmailStr
+    phone: str = Field(..., min_length=7, max_length=30)
+    license_number: str | None = Field(None, min_length=5, max_length=100)
+    license_expiry: date | None = None
+    years_experience: int = Field(0, ge=0)
+
+
+class CompanyDriverCreateResponse(BaseModel):
+    """Resposta ao criar motorista com senha temporária."""
+
+    id: int
+    user_id: int
+    name: str
+    email: str | None
+    phone: str
+    company_id: int
+    temporary_password: str
+    average_rating: float
+    total_trips: int
+    available: bool
+
+    model_config = {"from_attributes": True}
+
+
 # ---------------------------------------------------------------------------
 # Cargas
 # ---------------------------------------------------------------------------

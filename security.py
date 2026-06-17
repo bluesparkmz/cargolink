@@ -3,6 +3,8 @@ Utilitários de segurança: hash de senhas e tokens JWT.
 Usa passlib (bcrypt) e python-jose.
 """
 
+import secrets
+import string
 from datetime import datetime, timedelta, timezone
 
 from jose import JWTError, jwt
@@ -45,3 +47,13 @@ def decode_token(token: str) -> dict | None:
         return jwt.decode(token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM])
     except JWTError:
         return None
+
+
+def generate_random_password(length: int = 12) -> str:
+    """
+    Gera uma senha aleatória segura.
+    Inclui letras maiúsculas, minúsculas, dígitos e símbolos.
+    """
+    characters = string.ascii_letters + string.digits + string.punctuation
+    password = ''.join(secrets.choice(characters) for _ in range(length))
+    return password
