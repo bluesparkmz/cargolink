@@ -3,6 +3,7 @@ Cliente HTTP para integração com M-Pesa API (Sandbox).
 """
 
 import logging
+import time
 from typing import Any
 
 import requests
@@ -20,6 +21,7 @@ class MpesaClient:
         self.base_url = settings.MPESA_HOST
         self.bearer_token = settings.MPESA_BEARER_TOKEN
         self.service_provider_code = settings.MPESA_SERVICE_PROVIDER_CODE
+        self.query_url = f"{self.base_url}/ipg/v1x/queryTransactionStatus/"
 
     def _get_headers(self) -> dict[str, str]:
         """Headers necessários para todas as requisições."""
@@ -88,6 +90,92 @@ class MpesaClient:
                 status_code=status.HTTP_502_BAD_GATEWAY,
                 detail="Resposta inválida do M-Pesa",
             )
+
+    def query_payment_status(
+        self,
+        transaction_id: str,
+        third_party_reference: str,
+    ) -> dict[str, Any]:
+        """
+        Consulta o estado de um pagamento junto ao M-Pesa.
+
+        Args:
+            transaction_id: ID ou ConversationID da transação no M-Pesa
+            third_party_reference: Referência do terceiro (ex: H5QZ68)
+
+        Returns:
+            Dicionário com o estado da transação.
+        """
+        headers = {
+            "Content-Type": "application/json",
+            "Accept": "application/json",
+            "Authorization": f"Bearer {self.bearer_token}",
+            "Origin": "developer.mpesa.vm.co.mz",
+            "User-Agent": "Mozilla/5.0",
+        }
+
+        params = {
+            "input_ThirdPartyReference": third_party_reference,
+            "input_QueryReference": transaction_id,
+            "input_ServiceProviderCode": self.service_provider_code,
+        }
+
+        try:
+            logger.info(f"Querying M-Pesa status for transaction: {transaction_id}")
+            
+            # Tenta GET primeiro, depois POST se falhar
+            response = requests.get(
+                self.query_url,
+                headers=headers,
+                params=params,
+                verify=True,
+                timeout=30,
+            )
+            
+            if response.status_code in (405, 404):
+                response = requests.post(
+                    self.query_url,
+                    headers=headers,
+                    json=params,
+                    verify=True,
+                    timeout=30,
+                )
+            
+            if response.status_code not in (200, 201):
+                logger.error(f"M-Pesa query error: {response.status_code}")
+                return {
+                    "success": False,
+                    "message": f"API error: {response.status_code}",
+                }
+            
+            api_response = response.json()
+            response_code = api_response.get("output_ResponseCode", "")
+            response_desc = api_response.get("output_ResponseDesc", "")
+            
+            # Extrai status da transação (pode estar em vários campos)
+            transaction_status = (
+                api_response.get("output_TransactionStatus")
+                or api_response.get("output_TransactionStatusDesc")
+                or api_response.get("output_TransactionStatusDescription")
+                or response_desc
+                or "Unknown"
+            )
+            
+            logger.info(f"M-Pesa status response: {response_code} - {transaction_status}")
+            
+            return {
+                "success": True,
+                "response_code": response_code,
+                "response_description": response_desc,
+                "transaction_status": transaction_status,
+                "api_response": api_response,
+            }
+        except requests.exceptions.Timeout:
+            logger.error("M-Pesa query timeout")
+            return {"success": False, "message": "M-Pesa API timeout"}
+        except Exception as e:
+            logger.error(f"Error querying M-Pesa status: {str(e)}")
+            return {"success": False, "message": str(e)}
 
 
 # Instância global
