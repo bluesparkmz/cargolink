@@ -125,12 +125,33 @@ def patch_location(
 @router.patch("/{vehicle_id}", response_model=VehicleListItem)
 def patch(
     vehicle_id: int,
-    data: VehicleUpdateRequest,
+    plate: str | None = Form(None),
+    driver_id: int | None = Form(None),
+    driver_email: str | None = Form(None),
+    brand: str | None = Form(None),
+    model_name: str | None = Form(None),
+    vehicle_type: str | None = Form(None),
+    tonnage_capacity: float | None = Form(None),
+    status: str | None = Form(None),
+    photo: Annotated[
+        UploadFile | None,
+        File(description="Foto do camião (jpg, png)"),
+    ] = None,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    """Empresa atualiza o proprio camiao."""
-    vehicle = update_vehicle(db, current_user, data=data, vehicle_id=vehicle_id)
+    """Empresa atualiza o camiao (com foto opcional)."""
+    data = VehicleUpdateRequest(
+        plate=plate,
+        driver_id=driver_id,
+        driver_email=driver_email,
+        brand=brand,
+        model_name=model_name,
+        vehicle_type=vehicle_type,
+        tonnage_capacity=tonnage_capacity,
+        status=status,
+    )
+    vehicle = update_vehicle(db, current_user, vehicle_id=vehicle_id, data=data, photo_file=photo)
     return _to_list_item(vehicle)
 
 

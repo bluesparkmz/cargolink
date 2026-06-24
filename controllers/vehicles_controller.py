@@ -225,9 +225,9 @@ def create_vehicle(
 
 
 def update_vehicle(
-    db: Session, user: User, vehicle_id: int, data: VehicleUpdateRequest
+    db: Session, user: User, vehicle_id: int, data: VehicleUpdateRequest, photo_file: UploadFile | None = None
 ) -> Vehicle:
-    """Empresa atualiza o proprio veiculo."""
+    """Empresa atualiza o proprio veiculo (com upload opcional de foto)."""
     if user.user_type != "empresa":
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
@@ -263,6 +263,12 @@ def update_vehicle(
                 detail="Matricula ja registada",
             )
         fields["plate"] = plate
+
+    # Processa upload de foto se fornecido
+    if photo_file is not None:
+        photo_url = save_vehicle_photo(photo_file)
+        if photo_url:
+            fields["photo"] = photo_url
 
     fields = _normalize_vehicle_payload(fields)
     for field, value in fields.items():
