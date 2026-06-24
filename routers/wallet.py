@@ -8,6 +8,7 @@ from sqlalchemy.orm import Session
 from controllers.wallet_controller import (
     confirm_deposit,
     create_deposit,
+    create_deposit_with_polling,
     get_wallet_balance,
     list_wallet_transactions,
     process_mpesa_callback,
@@ -56,6 +57,32 @@ async def request_deposit(
 ):
     """Inicia depósito na carteira via M-Pesa (botão + no app)."""
     return await create_deposit(db, current_user, data)
+
+
+@router.post("/deposits-with-polling", response_model=WalletDepositResponse, status_code=201)
+async def request_deposit_with_polling(
+    data: WalletDepositRequest,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """
+    Inicia depósito e aguarda confirmação do usuário via polling automático (até 60s).
+    
+    Diferente de /deposits que retorna imediatamente, esta rota:
+    1. Inicia o pagamento M-Pesa
+    2. Aguarda automaticamente o usuário confirmar no telemóvel
+    3. Credita o saldo se confirmado
+    4. Retorna erro se rejeitado ou timeout
+    
+    Use esta rota para fluxo mais direto sem callbacks de webhook.
+    """
+    return await create_deposit_with_polling(
+        db, 
+        current_user, 
+        data,
+        max_wait_seconds=60  # Espera até 60 segundos
+    )
+
 
 
 @router.post("/deposits/{payment_id}/confirm", response_model=WalletDepositResponse)
