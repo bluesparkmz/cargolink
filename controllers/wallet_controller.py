@@ -132,7 +132,7 @@ async def create_deposit(db: Session, user: User, data: WalletDepositRequest) ->
             "payment_id": payment.id,
             "transaction_id": transaction.id,
             "amount": float(amount),
-            "status": PAYMENT_STATUS_COMPLETED,
+            "status": "completed",  # Frontend espera inglês
             "external_reference": external_reference,
             "phone": phone,
             "message": "Depósito confirmado (modo desenvolvimento). Saldo atualizado.",
@@ -168,7 +168,7 @@ async def create_deposit(db: Session, user: User, data: WalletDepositRequest) ->
                 "payment_id": payment.id,
                 "transaction_id": transaction.id,
                 "amount": float(amount),
-                "status": PAYMENT_STATUS_FAILED,
+                "status": "failed",  # Frontend espera inglês
                 "external_reference": external_reference,
                 "phone": phone,
                 "message": f"M-Pesa rejeitou: {response_desc}",
@@ -181,7 +181,7 @@ async def create_deposit(db: Session, user: User, data: WalletDepositRequest) ->
             "payment_id": payment.id,
             "transaction_id": transaction.id,
             "amount": float(amount),
-            "status": PAYMENT_STATUS_PENDING,
+            "status": "pending",  # Frontend espera inglês
             "external_reference": external_reference,
             "phone": phone,
             "message": (
@@ -196,14 +196,24 @@ async def create_deposit(db: Session, user: User, data: WalletDepositRequest) ->
         transaction.status = "failed"
         payment.gateway_response = {"error": str(e)}
         db.commit()
+        
+        # Mensagem mais clara sobre o erro
+        error_msg = str(e)
+        if "403" in error_msg:
+            user_msg = "Erro na configuração de autenticação com M-Pesa. Contacte suporte."
+        elif "Connection" in error_msg or "timeout" in error_msg.lower():
+            user_msg = "Erro de conexão com M-Pesa. Tente novamente."
+        else:
+            user_msg = f"Erro ao processar depósito: {error_msg[:100]}"
+        
         return {
             "payment_id": payment.id,
             "transaction_id": transaction.id,
             "amount": float(amount),
-            "status": PAYMENT_STATUS_FAILED,
+            "status": "failed",  # Frontend espera inglês
             "external_reference": external_reference,
             "phone": phone,
-            "message": f"Erro ao processar depósito: {str(e)}",
+            "message": user_msg,
         }
 
 

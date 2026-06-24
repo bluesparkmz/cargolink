@@ -4,9 +4,11 @@ Cliente HTTP para integração com M-Pesa API (Sandbox).
 
 import asyncio
 import logging
+import time
 from typing import Any
 
 import httpx
+import requests
 from fastapi import HTTPException, status
 
 from config import settings
@@ -66,31 +68,50 @@ class MpesaClient:
                 f"for {customer_msisdn} (MT {amount})"
             )
             
-            async with httpx.AsyncClient(timeout=30) as client:
+            async with httpx.AsyncClient(timeout=30, verify=False) as client:
                 response = await client.post(
                     url,
                     json=payload,
                     headers=self._get_headers(),
                 )
             
-            response.raise_for_status()
-            result = response.json()
+            logger.info(f"M-Pesa HTTP {response.status_code}: {response.text[:200]}")
+            
+            # Tenta extrair JSON mesmo se status não for 200
+            try:
+                result = response.json()
+            except:
+                result = {"output_ResponseCode": "999", "output_ResponseDesc": f"HTTP {response.status_code}"}
+            
+            # Se não foi sucesso (2xx), adiciona o código de erro HTTP
+            if response.status_code >= 400:
+                result["http_status"] = response.status_code
+                logger.error(f"M-Pesa API error: {response.status_code} - {result}")
+                return result
+            
             logger.info(f"M-Pesa response: {result}")
             return result
             
+        except httpx.TimeoutException as e:
+            logger.error(f"M-Pesa timeout: {str(e)}")
+            return {
+                "output_ResponseCode": "999",
+                "output_ResponseDesc": "Timeout ao contactar M-Pesa",
+                "http_status": 504,
+            }
         except httpx.RequestError as e:
             logger.error(f"M-Pesa API error: {str(e)}")
             return {
-                "success": False,
-                "status": "failed",
-                "message": f"Erro na integração com M-Pesa: {str(e)}",
+                "output_ResponseCode": "999",
+                "output_ResponseDesc": f"Erro de conexão: {str(e)[:100]}",
+                "http_status": 503,
             }
-        except ValueError as e:
-            logger.error(f"M-Pesa JSON error: {str(e)}")
+        except Exception as e:
+            logger.error(f"M-Pesa unexpected error: {str(e)}", exc_info=True)
             return {
-                "success": False,
-                "status": "failed",
-                "message": "Resposta inválida do M-Pesa",
+                "output_ResponseCode": "999",
+                "output_ResponseDesc": f"Erro inesperado: {str(e)[:100]}",
+                "http_status": 500,
             }
 
     def initiate_payment(
@@ -216,6 +237,250 @@ class MpesaClient:
         except Exception as e:
             logger.error(f"Error querying M-Pesa status: {str(e)}")
             return {"success": False, "message": str(e)}
+
+    def wait_for_payment_confirmation(
+        self,
+        conversation_id: str,
+        third_party_reference: str,
+        max_wait_seconds: int = 60,
+        poll_interval_seconds: int = 6,
+    ) -> dict[str, Any]:
+        """
+        Aguarda e verifica se o usuário confirmou o pagamento M-Pesa.
+        
+        Esta função faz polling (consultas periódicas) até que:
+        - O pagamento seja confirmado (sucesso)
+        - O pagamento seja rejeitado (falha)
+        - O tempo máximo de espera seja atingido (timeout)
+        
+        Args:
+            conversation_id: ID da conversa retornado por initiate_payment()
+            third_party_reference: Referência de terceiros (ex: H5QZ68)
+            max_wait_seconds: Tempo máximo de espera em segundos (padrão: 60 = 1 minuto)
+            poll_interval_seconds: Intervalo entre tentativas em segundos (padrão: 6)
+        
+        Returns:
+            Dict com resultado:
+            {
+                "confirmed": True/False,
+                "status": "confirmed"/"rejected"/"timeout",
+                "attempts": número de tentativas feitas,
+                "wait_time_seconds": tempo total de espera,
+                "query_result": resultado da última query,
+            }
+        """
+        start_time = time.time()
+        max_attempts = max(1, max_wait_seconds // poll_interval_seconds)
+        
+        logger.info(
+            f"Starting payment confirmation polling: conversation_id={conversation_id}, "
+            f"max_attempts={max_attempts}, poll_interval={poll_interval_seconds}s"
+        )
+        
+        for attempt in range(1, max_attempts + 1):
+            # Aguarda antes de cada tentativa (exceto a primeira)
+            if attempt > 1:
+                elapsed = time.time() - start_time
+                if elapsed >= max_wait_seconds:
+                    logger.warning(
+                        f"Payment confirmation timeout after {elapsed:.1f}s "
+                        f"(conversation_id={conversation_id})"
+                    )
+                    return {
+                        "confirmed": False,
+                        "status": "timeout",
+                        "attempts": attempt - 1,
+                        "wait_time_seconds": int(elapsed),
+                        "message": "Timeout aguardando confirmação do pagamento",
+                    }
+                time.sleep(poll_interval_seconds)
+            
+            # Query o status
+            query_result = self.query_payment_status(
+                transaction_id=conversation_id,
+                third_party_reference=third_party_reference,
+            )
+            
+            if not query_result.get("success"):
+                logger.debug(
+                    f"Payment status query failed (attempt {attempt}/{max_attempts}): "
+                    f"{query_result.get('message')}"
+                )
+                continue
+            
+            # Extrai o status da transação
+            status_text = query_result.get("transaction_status", "").strip().lower()
+            response_code = query_result.get("response_code", "")
+            
+            logger.debug(
+                f"Payment status (attempt {attempt}/{max_attempts}): "
+                f"status={status_text}, code={response_code}"
+            )
+            
+            # Verifica se foi confirmado
+            success_keywords = ["success", "sucesso", "completed", "concluido", 
+                              "approved", "aprovado", "accepted"]
+            if any(keyword in status_text for keyword in success_keywords):
+                elapsed = time.time() - start_time
+                logger.info(
+                    f"Payment CONFIRMED after {elapsed:.1f}s (attempt {attempt}): "
+                    f"conversation_id={conversation_id}, status={status_text}"
+                )
+                return {
+                    "confirmed": True,
+                    "status": "confirmed",
+                    "attempts": attempt,
+                    "wait_time_seconds": int(elapsed),
+                    "transaction_status": status_text,
+                    "response_code": response_code,
+                    "query_result": query_result,
+                }
+            
+            # Verifica se foi rejeitado
+            failed_keywords = ["failed", "falhou", "rejected", "rejeitado", 
+                             "cancelled", "cancelado", "declined", "error"]
+            if any(keyword in status_text for keyword in failed_keywords):
+                elapsed = time.time() - start_time
+                logger.warning(
+                    f"Payment REJECTED after {elapsed:.1f}s (attempt {attempt}): "
+                    f"conversation_id={conversation_id}, status={status_text}"
+                )
+                return {
+                    "confirmed": False,
+                    "status": "rejected",
+                    "attempts": attempt,
+                    "wait_time_seconds": int(elapsed),
+                    "transaction_status": status_text,
+                    "response_code": response_code,
+                    "query_result": query_result,
+                    "message": f"Pagamento rejeitado: {status_text}",
+                }
+        
+        # Timeout após todas as tentativas
+        elapsed = time.time() - start_time
+        logger.warning(
+            f"Payment confirmation timeout after {elapsed:.1f}s and {max_attempts} attempts: "
+            f"conversation_id={conversation_id}"
+        )
+        return {
+            "confirmed": False,
+            "status": "timeout",
+            "attempts": max_attempts,
+            "wait_time_seconds": int(elapsed),
+            "message": f"Timeout aguardando confirmação após {int(elapsed)}s",
+        }
+
+    async def wait_for_payment_confirmation_async(
+        self,
+        conversation_id: str,
+        third_party_reference: str,
+        max_wait_seconds: int = 60,
+        poll_interval_seconds: int = 6,
+    ) -> dict[str, Any]:
+        """
+        Versão assíncrona de wait_for_payment_confirmation().
+        Use em rotas FastAPI async.
+        """
+        start_time = time.time()
+        max_attempts = max(1, max_wait_seconds // poll_interval_seconds)
+        
+        logger.info(
+            f"Starting async payment confirmation polling: conversation_id={conversation_id}, "
+            f"max_attempts={max_attempts}, poll_interval={poll_interval_seconds}s"
+        )
+        
+        for attempt in range(1, max_attempts + 1):
+            # Aguarda antes de cada tentativa (exceto a primeira)
+            if attempt > 1:
+                elapsed = time.time() - start_time
+                if elapsed >= max_wait_seconds:
+                    logger.warning(
+                        f"Payment confirmation timeout after {elapsed:.1f}s "
+                        f"(conversation_id={conversation_id})"
+                    )
+                    return {
+                        "confirmed": False,
+                        "status": "timeout",
+                        "attempts": attempt - 1,
+                        "wait_time_seconds": int(elapsed),
+                        "message": "Timeout aguardando confirmação do pagamento",
+                    }
+                await asyncio.sleep(poll_interval_seconds)
+            
+            # Query o status
+            query_result = self.query_payment_status(
+                transaction_id=conversation_id,
+                third_party_reference=third_party_reference,
+            )
+            
+            if not query_result.get("success"):
+                logger.debug(
+                    f"Payment status query failed (attempt {attempt}/{max_attempts}): "
+                    f"{query_result.get('message')}"
+                )
+                continue
+            
+            # Extrai o status da transação
+            status_text = query_result.get("transaction_status", "").strip().lower()
+            response_code = query_result.get("response_code", "")
+            
+            logger.debug(
+                f"Payment status (attempt {attempt}/{max_attempts}): "
+                f"status={status_text}, code={response_code}"
+            )
+            
+            # Verifica se foi confirmado
+            success_keywords = ["success", "sucesso", "completed", "concluido", 
+                              "approved", "aprovado", "accepted"]
+            if any(keyword in status_text for keyword in success_keywords):
+                elapsed = time.time() - start_time
+                logger.info(
+                    f"Payment CONFIRMED after {elapsed:.1f}s (attempt {attempt}): "
+                    f"conversation_id={conversation_id}, status={status_text}"
+                )
+                return {
+                    "confirmed": True,
+                    "status": "confirmed",
+                    "attempts": attempt,
+                    "wait_time_seconds": int(elapsed),
+                    "transaction_status": status_text,
+                    "response_code": response_code,
+                    "query_result": query_result,
+                }
+            
+            # Verifica se foi rejeitado
+            failed_keywords = ["failed", "falhou", "rejected", "rejeitado", 
+                             "cancelled", "cancelado", "declined", "error"]
+            if any(keyword in status_text for keyword in failed_keywords):
+                elapsed = time.time() - start_time
+                logger.warning(
+                    f"Payment REJECTED after {elapsed:.1f}s (attempt {attempt}): "
+                    f"conversation_id={conversation_id}, status={status_text}"
+                )
+                return {
+                    "confirmed": False,
+                    "status": "rejected",
+                    "attempts": attempt,
+                    "wait_time_seconds": int(elapsed),
+                    "transaction_status": status_text,
+                    "response_code": response_code,
+                    "query_result": query_result,
+                    "message": f"Pagamento rejeitado: {status_text}",
+                }
+        
+        # Timeout após todas as tentativas
+        elapsed = time.time() - start_time
+        logger.warning(
+            f"Payment confirmation timeout after {elapsed:.1f}s and {max_attempts} attempts: "
+            f"conversation_id={conversation_id}"
+        )
+        return {
+            "confirmed": False,
+            "status": "timeout",
+            "attempts": max_attempts,
+            "wait_time_seconds": int(elapsed),
+            "message": f"Timeout aguardando confirmação após {int(elapsed)}s",
+        }
 
 
 # Instância global
