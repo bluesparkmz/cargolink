@@ -972,6 +972,17 @@ class WalletDepositResponse(BaseModel):
     message: str
 
 
+class WalletDepositStatusResponse(BaseModel):
+    """Estado actual de um depósito (polling)."""
+
+    payment_id: int
+    amount: float
+    status: str
+    external_reference: str
+    phone: str
+    message: str
+
+
 # ---------------------------------------------------------------------------
 # Notificações
 # ---------------------------------------------------------------------------

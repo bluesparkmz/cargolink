@@ -17,7 +17,10 @@ from constants import (
 from controllers.mpesa_client import mpesa_client
 from controllers.mpesa_utils import (
     build_mpesa_reference,
+    evaluate_payment_status,
+    extract_payment_status,
     is_mpesa_accepted,
+    is_mpesa_failed,
     is_mpesa_success,
     normalize_msisdn,
     normalize_mpesa_reference,
@@ -457,6 +460,42 @@ async def create_deposit_with_polling(
         }
 
 
+def get_deposit_status(db: Session, user: User, payment_id: int) -> dict:
+    """Estado actual do depósito (para polling do frontend)."""
+    payment = db.query(Payment).filter(Payment.id == payment_id).first()
+    if payment is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Pagamento não encontrado")
+    if payment.user_id != user.id:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Sem acesso")
+    if payment.method != PAYMENT_METHOD_MPESA or payment.load_id is not None:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Pagamento inválido para depósito na carteira",
+        )
+
+    status_map = {
+        PAYMENT_STATUS_COMPLETED: "completed",
+        PAYMENT_STATUS_PENDING: "pending",
+        PAYMENT_STATUS_FAILED: "failed",
+    }
+    mapped_status = status_map.get(payment.status, payment.status)
+
+    messages = {
+        "completed": "Depósito confirmado.",
+        "pending": "Aguardando confirmação no telemóvel.",
+        "failed": "Depósito cancelado ou rejeitado.",
+    }
+
+    return {
+        "payment_id": payment.id,
+        "amount": float(payment.amount),
+        "status": mapped_status,
+        "external_reference": payment.external_reference or "",
+        "phone": payment.phone or user.phone,
+        "message": messages.get(mapped_status, "Estado do depósito actualizado."),
+    }
+
+
 def confirm_deposit(db: Session, user: User, payment_id: int) -> dict:
     """
     Confirma depósito pendente manualmente (para testes ou confirmação manual).
@@ -576,8 +615,13 @@ def process_mpesa_callback(payload: dict) -> dict:
                 "message": f"Pagamento já foi processado com status: {payment.status}",
             }
         
-        # ========== Sucesso: INS-0 / INS0 ==========
-        if is_mpesa_success(response_code):
+        payment_status = extract_payment_status(payload)
+        verdict = evaluate_payment_status(
+            response_code=response_code,
+            payment_status=payment_status,
+        )
+
+        if verdict == "confirmed":
             user = db.query(User).filter(User.id == payment.user_id).first()
             if not user:
                 logger.error(f"User not found for payment {payment.id}")

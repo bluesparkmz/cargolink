@@ -9,6 +9,7 @@ from controllers.wallet_controller import (
     confirm_deposit,
     create_deposit,
     create_deposit_with_polling,
+    get_deposit_status,
     get_wallet_balance,
     list_wallet_transactions,
     process_mpesa_callback,
@@ -20,6 +21,7 @@ from schemas.schemas import (
     WalletBalanceResponse,
     WalletDepositRequest,
     WalletDepositResponse,
+    WalletDepositStatusResponse,
     WalletTransactionResponse,
 )
 
@@ -83,6 +85,16 @@ async def request_deposit_with_polling(
         max_wait_seconds=60  # Espera até 60 segundos
     )
 
+
+
+@router.get("/deposits/{payment_id}/status", response_model=WalletDepositStatusResponse)
+def deposit_status_route(
+    payment_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Consulta estado do depósito (pending/completed/failed)."""
+    return get_deposit_status(db, current_user, payment_id)
 
 
 @router.post("/deposits/{payment_id}/confirm", response_model=WalletDepositResponse)

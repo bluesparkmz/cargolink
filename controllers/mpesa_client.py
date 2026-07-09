@@ -14,6 +14,8 @@ import requests
 
 from config import settings
 from controllers.mpesa_utils import (
+    evaluate_payment_status,
+    extract_payment_status,
     format_mpesa_amount,
     is_mpesa_accepted,
     normalize_mpesa_reference,
@@ -194,23 +196,20 @@ class MpesaClient:
             api_response = response.json()
             response_code = api_response.get("output_ResponseCode", "")
             response_desc = api_response.get("output_ResponseDesc", "")
-            transaction_status = (
-                api_response.get("status_da_transacao_resposta")
-                or api_response.get("status_da_transação_resposta")
-                or api_response.get("output_TransactionStatus")
-                or api_response.get("output_TransactionStatusDesc")
-                or api_response.get("output_TransactionStatusDescription")
-                or response_desc
-                or "Unknown"
-            )
+            payment_status = extract_payment_status(api_response)
 
-            logger.info("M-Pesa query: code=%s status=%s", response_code, transaction_status)
+            logger.info(
+                "M-Pesa query: code=%s payment_status=%s desc=%s",
+                response_code,
+                payment_status,
+                response_desc,
+            )
 
             return {
                 "success": True,
                 "response_code": response_code,
                 "response_description": response_desc,
-                "transaction_status": transaction_status,
+                "transaction_status": payment_status,
                 "api_response": api_response,
             }
         except requests.exceptions.Timeout:
@@ -222,25 +221,10 @@ class MpesaClient:
 
     def _evaluate_polling_result(self, query_result: dict[str, Any]) -> str | None:
         """Retorna 'confirmed', 'rejected' ou None se ainda pendente."""
-        status_text = query_result.get("transaction_status", "").strip().lower()
-        response_code = query_result.get("response_code", "")
-
-        success_keywords = [
-            "success", "sucesso", "completed", "concluido", "concluído",
-            "approved", "aprovado", "accepted", "done", "pago",
-        ]
-        failed_keywords = [
-            "failed", "falhou", "rejected", "rejeitado", "cancelled",
-            "cancelado", "declined", "error", "expired", "falha",
-        ]
-
-        if is_mpesa_accepted(response_code) and any(kw in status_text for kw in success_keywords):
-            return "confirmed"
-        if any(kw in status_text for kw in failed_keywords):
-            return "rejected"
-        if is_mpesa_accepted(response_code) and status_text in ("", "unknown"):
-            return None
-        return None
+        return evaluate_payment_status(
+            response_code=query_result.get("response_code"),
+            payment_status=query_result.get("transaction_status"),
+        )
 
     async def wait_for_payment_confirmation_async(
         self,
