@@ -14,14 +14,12 @@ from constants import (
     TRANSACTION_STATUS_PENDING,
     TRANSACTION_TYPE_DEPOSIT,
 )
-from controllers.mpesa_client import mpesa_client
+from controllers.mpesa_client import mpesa_client, MPESA_POLL_INTERVAL_SECONDS
 from controllers.mpesa_utils import (
     build_mpesa_reference,
-    evaluate_payment_status,
-    extract_payment_status,
-    is_mpesa_accepted,
-    is_mpesa_failed,
-    is_mpesa_success,
+    classify_mpesa_status,
+    extract_transaction_status,
+    is_mpesa_c2b_accepted,
     normalize_msisdn,
     normalize_mpesa_reference,
 )
@@ -188,7 +186,7 @@ async def create_deposit(db: Session, user: User, data: WalletDepositRequest) ->
         
         logger.info(f"M-Pesa C2B response: code={response_code}, desc={response_desc}")
         
-        if not is_mpesa_accepted(response_code):
+        if not is_mpesa_c2b_accepted(response_code):
             payment.status = PAYMENT_STATUS_FAILED
             transaction.status = "failed"
             db.commit()
@@ -337,7 +335,7 @@ async def create_deposit_with_polling(
         
         logger.info(f"M-Pesa C2B response: code={response_code}, desc={response_desc}")
         
-        if not is_mpesa_accepted(response_code):
+        if not is_mpesa_c2b_accepted(response_code):
             payment.status = PAYMENT_STATUS_FAILED
             transaction.status = "failed"
             db.commit()
@@ -354,25 +352,25 @@ async def create_deposit_with_polling(
         
         # ========== INS-0 ACEITO: Inicia Polling ==========
         conversation_id = mpesa_response.get("output_ConversationID", "")
-        transaction_id = mpesa_response.get("output_TransactionID", "")
         third_party_ref_sent = mpesa_response.get("_third_party_reference", third_party_ref)
         
         logger.info(
-            f"M-Pesa accepted (INS-0). Starting polling: "
+            f"M-Pesa accepted (INS-0). Starting Skywallet polling: "
             f"payment_id={payment.id}, conversation_id={conversation_id}"
         )
         
+        max_retries = max(1, max_wait_seconds // MPESA_POLL_INTERVAL_SECONDS)
+
         polling_result = await mpesa_client.wait_for_payment_confirmation_async(
-            conversation_id=conversation_id or transaction_ref,
+            c2b_response=mpesa_response,
+            transaction_reference=transaction_ref,
             third_party_reference=third_party_ref_sent,
-            max_wait_seconds=max_wait_seconds,
-            poll_interval_seconds=6,
-            transaction_id=transaction_id or conversation_id or transaction_ref,
+            max_retries=max_retries,
         )
         
-        # Processa resultado do polling
-        if polling_result.get("confirmed"):
-            # ✅ CONFIRMADO: Credita o saldo
+        poll_status = polling_result.get("status")
+
+        if poll_status == "success":
             logger.info(f"Payment confirmed after polling: payment_id={payment.id}")
             _complete_deposit(db, wallet, payment, transaction)
             
@@ -383,18 +381,21 @@ async def create_deposit_with_polling(
                 "status": "completed",
                 "external_reference": external_reference,
                 "phone": phone,
-                "message": f"Depósito confirmado em {polling_result.get('wait_time_seconds', '?')}s. Saldo atualizado.",
+                "message": polling_result.get("message", "Depósito confirmado. Saldo actualizado."),
                 "polling_info": {
                     "attempts": polling_result.get("attempts"),
                     "wait_time_seconds": polling_result.get("wait_time_seconds"),
                 }
             }
         
-        elif polling_result.get("status") == "rejected":
-            # ❌ REJEITADO: Marca como falha
+        if poll_status == "failed":
             logger.warning(f"Payment rejected after polling: payment_id={payment.id}")
             payment.status = PAYMENT_STATUS_FAILED
             transaction.status = "failed"
+            payment.gateway_response = {
+                "c2b": mpesa_response,
+                "polling": polling_result.get("query_result"),
+            }
             db.commit()
             
             return {
@@ -404,34 +405,33 @@ async def create_deposit_with_polling(
                 "status": "failed",
                 "external_reference": external_reference,
                 "phone": phone,
-                "message": f"Pagamento rejeitado: {polling_result.get('message', 'Motivo desconhecido')}",
+                "message": polling_result.get("message", "Pagamento cancelado ou rejeitado."),
                 "polling_info": {
                     "attempts": polling_result.get("attempts"),
                     "wait_time_seconds": polling_result.get("wait_time_seconds"),
                 }
             }
         
-        else:
-            # ⏱️ TIMEOUT: Deixa como PENDING (callback pode vir depois)
-            logger.warning(f"Payment polling timeout: payment_id={payment.id}")
-            db.commit()
-            
-            return {
-                "payment_id": payment.id,
-                "transaction_id": transaction.id,
-                "amount": float(amount),
-                "status": "pending",
-                "external_reference": external_reference,
-                "phone": phone,
-                "message": (
-                    "Pagamento ainda está pendente. "
-                    "Se já confirmou no telemóvel, o saldo será atualizado em breve."
-                ),
-                "polling_info": {
-                    "attempts": polling_result.get("attempts"),
-                    "wait_time_seconds": polling_result.get("wait_time_seconds"),
-                }
+        # pending / timeout — NÃO creditar
+        logger.warning(f"Payment still pending after polling: payment_id={payment.id}")
+        db.commit()
+        
+        return {
+            "payment_id": payment.id,
+            "transaction_id": transaction.id,
+            "amount": float(amount),
+            "status": "pending",
+            "external_reference": external_reference,
+            "phone": phone,
+            "message": polling_result.get(
+                "message",
+                "Pagamento pendente. Confirme no telemóvel ou tente novamente.",
+            ),
+            "polling_info": {
+                "attempts": polling_result.get("attempts"),
+                "wait_time_seconds": polling_result.get("wait_time_seconds"),
             }
+        }
         
     except Exception as e:
         logger.error(f"Unexpected error in create_deposit_with_polling: {str(e)}", exc_info=True)
@@ -615,13 +615,19 @@ def process_mpesa_callback(payload: dict) -> dict:
                 "message": f"Pagamento já foi processado com status: {payment.status}",
             }
         
-        payment_status = extract_payment_status(payload)
-        verdict = evaluate_payment_status(
-            response_code=response_code,
-            payment_status=payment_status,
+        transaction_status = extract_transaction_status(payload)
+        final_state = classify_mpesa_status(
+            payload.get("output_ResponseCode"),
+            transaction_status,
+            payload.get("output_ResponseDesc"),
         )
 
-        if verdict == "confirmed":
+        logger.info(
+            f"M-Pesa callback classified: payment_id={payment.id if payment else '?'} "
+            f"state={final_state} tx_status={transaction_status}"
+        )
+
+        if final_state == "success":
             user = db.query(User).filter(User.id == payment.user_id).first()
             if not user:
                 logger.error(f"User not found for payment {payment.id}")
@@ -660,12 +666,10 @@ def process_mpesa_callback(payload: dict) -> dict:
                 "payment_id": payment_id_val,
             }
         
-        # ========== Falha: Código diferente de INS0 ==========
-        else:
+        elif final_state == "failed":
             payment.status = PAYMENT_STATUS_FAILED
             payment.gateway_response = payload
             
-            # Marca a transação como falha também
             transaction = (
                 db.query(Transaction)
                 .filter(Transaction.reference == payment.external_reference)
@@ -676,12 +680,25 @@ def process_mpesa_callback(payload: dict) -> dict:
             
             db.commit()
             logger.warning(
-                f"❌ M-Pesa payment rejected: payment_id={payment.id}, "
+                f"M-Pesa payment rejected via callback: payment_id={payment.id}, "
                 f"code={response_code}, desc={response_desc}"
             )
             return {
                 "status": "failed",
                 "message": f"Pagamento rejeitado: {response_desc}",
+                "payment_id": payment.id,
+            }
+
+        else:
+            payment.gateway_response = payload
+            db.commit()
+            logger.info(
+                f"M-Pesa callback pending for payment {payment.id}: "
+                f"code={response_code}, status={transaction_status}"
+            )
+            return {
+                "status": "pending",
+                "message": "Callback recebido; pagamento ainda pendente.",
                 "payment_id": payment.id,
             }
             

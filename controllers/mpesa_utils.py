@@ -1,4 +1,4 @@
-"""Utilitários partilhados para integração M-Pesa (alinhado com Skywallet)."""
+"""Utilitários M-Pesa — lógica alinhada com Skywallet."""
 
 import random
 import re
@@ -6,12 +6,14 @@ import string
 import time
 from datetime import datetime
 from decimal import Decimal
+from typing import Any
 
 from fastapi import HTTPException
 
-MPESA_SUCCESS_CODES = {"INS-0", "INS0"}
+MPESA_SUCCESS_CODE = "INS-0"
 
-# Códigos M-Pesa que indicam pagamento falhado/cancelado (não confundir com INS-0 do pedido C2B)
+MPESA_PENDING_CODES = {"INS-9", "INS-16"}
+
 MPESA_FAILED_CODES = {
     "INS-1", "INS-2", "INS-4", "INS-5", "INS-6", "INS-10", "INS-13", "INS-14",
     "INS-15", "INS-17", "INS-18", "INS-19", "INS-20", "INS-21", "INS-22",
@@ -20,23 +22,11 @@ MPESA_FAILED_CODES = {
     "INS-2051", "INS-2057",
 }
 
-PAYMENT_SUCCESS_KEYWORDS = (
-    "success", "sucesso", "completed", "concluido", "concluída", "concluido",
-    "approved", "aprovado", "done", "pago",
-)
-PAYMENT_FAILED_KEYWORDS = (
-    "failed", "falhou", "falha", "rejected", "rejeitado", "cancelled", "canceled",
-    "cancelado", "declined", "error", "expired", "timeout", "denied", "negado",
-)
-
-# Campos que descrevem o estado do pagamento (não a resposta HTTP da query)
-PAYMENT_STATUS_FIELDS = (
-    "status_da_transacao_resposta",
-    "status_da_transação_resposta",
-    "output_TransactionStatus",
-    "output_TransactionStatusDesc",
-    "output_TransactionStatusDescription",
-)
+TERMINAL_SUCCESS_STATUSES = {"completed", "success", "sucesso", "concluido", "concluida"}
+TERMINAL_FAILED_STATUSES = {
+    "cancelled", "canceled", "failed", "rejected", "expired", "error",
+    "falha", "cancelado", "rejeitado",
+}
 
 
 def normalize_msisdn(msisdn: str) -> str:
@@ -63,7 +53,7 @@ def normalize_msisdn(msisdn: str) -> str:
 
 
 def normalize_mpesa_reference(value: str, *, fallback_prefix: str = "CL") -> str:
-    """Referência alfanumérica, máximo 20 caracteres (exigência M-Pesa)."""
+    """Referência alfanumérica, máximo 20 caracteres."""
     raw = (value or "").strip().upper()
     cleaned = re.sub(r"[^A-Z0-9]", "", raw)
     if not cleaned:
@@ -79,7 +69,7 @@ def build_mpesa_reference(prefix: str = "CL") -> str:
 
 
 def format_mpesa_amount(amount: Decimal | float) -> str:
-    """Formata valor sem zeros desnecessários (ex: 10 em vez de 10.0)."""
+    """Formata valor sem zeros desnecessários."""
     normalized = Decimal(str(amount)).quantize(Decimal("0.01"))
     text = format(normalized, "f")
     if "." in text:
@@ -87,63 +77,60 @@ def format_mpesa_amount(amount: Decimal | float) -> str:
     return text or "0"
 
 
-def is_mpesa_accepted(response_code: str | None) -> bool:
-    """Verifica se M-Pesa aceitou o pedido C2B (INS-0)."""
-    if not response_code:
-        return False
-    return response_code.strip().upper().replace("-", "") == "INS0"
+def is_mpesa_c2b_accepted(response_code: str | None) -> bool:
+    """C2B aceite — exactamente INS-0 (Skywallet)."""
+    return str(response_code or "").strip() == MPESA_SUCCESS_CODE
 
 
-def is_mpesa_success(response_code: str | None) -> bool:
-    """Verifica código de sucesso (callback ou query)."""
-    if not response_code:
-        return False
-    normalized = response_code.strip().upper()
-    return normalized in MPESA_SUCCESS_CODES or normalized.replace("-", "") == "INS0"
-
-
-def is_mpesa_failed(response_code: str | None) -> bool:
-    """Código M-Pesa que indica falha/cancelamento do pagamento."""
-    if not response_code:
-        return False
-    return response_code.strip().upper() in MPESA_FAILED_CODES
-
-
-def extract_payment_status(api_response: dict | None) -> str | None:
-    """
-    Extrai apenas o estado real do pagamento.
-    Não usa output_ResponseDesc — esse campo confirma a query, não o pagamento.
-    """
+def extract_transaction_status(api_response: dict[str, Any] | None) -> str:
+    """Extrai estado da transação dos campos M-Pesa (Skywallet)."""
     if not api_response:
-        return None
-    for key in PAYMENT_STATUS_FIELDS:
-        value = api_response.get(key)
-        if value is not None and str(value).strip():
-            return str(value).strip()
-    return None
+        return "N/A"
+    status_value = (
+        api_response.get("output_ResponseTransactionStatus")
+        or api_response.get("output_TransactionStatus")
+        or api_response.get("output_TransactionStatusDesc")
+        or api_response.get("output_TransactionStatusDescription")
+        or api_response.get("status_da_transacao_resposta")
+        or api_response.get("status_da_transação_resposta")
+        or api_response.get("statusDaTransacaoResposta")
+        or api_response.get("statusDaTransaçãoResposta")
+    )
+    if status_value is None:
+        return "N/A"
+    return str(status_value)
 
 
-def evaluate_payment_status(
-    *,
+def classify_mpesa_status(
     response_code: str | None,
-    payment_status: str | None,
-) -> str | None:
+    transaction_status: str | None,
+    response_desc: str | None = None,
+) -> str:
     """
-    Avalia estado do pagamento para polling.
-    Retorna: 'confirmed', 'rejected' ou None (ainda pendente).
+    Classifica estado do pagamento: success | failed | pending.
+    Estado desconhecido NUNCA é tratado como sucesso (Skywallet).
     """
-    if is_mpesa_failed(response_code):
-        return "rejected"
+    _ = response_desc  # não usar ResponseDesc para classificar
+    code = str(response_code or "").strip()
+    status_text = str(transaction_status or "").strip().lower()
+    has_terminal_success = any(word in status_text for word in TERMINAL_SUCCESS_STATUSES)
+    has_terminal_failure = any(word in status_text for word in TERMINAL_FAILED_STATUSES)
 
-    if not payment_status:
-        return None
+    if code in MPESA_FAILED_CODES:
+        return "failed"
+    if code in MPESA_PENDING_CODES:
+        return "pending"
 
-    status_lower = payment_status.strip().lower()
+    if code == MPESA_SUCCESS_CODE:
+        if has_terminal_success:
+            return "success"
+        if has_terminal_failure:
+            return "failed"
+        return "pending"
 
-    if any(keyword in status_lower for keyword in PAYMENT_FAILED_KEYWORDS):
-        return "rejected"
+    if has_terminal_success:
+        return "success"
+    if has_terminal_failure:
+        return "failed"
 
-    if any(keyword in status_lower for keyword in PAYMENT_SUCCESS_KEYWORDS):
-        return "confirmed"
-
-    return None
+    return "pending"
