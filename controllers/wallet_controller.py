@@ -1,5 +1,4 @@
 import logging
-import uuid
 from decimal import Decimal
 
 from fastapi import HTTPException, status
@@ -16,6 +15,13 @@ from constants import (
     TRANSACTION_TYPE_DEPOSIT,
 )
 from controllers.mpesa_client import mpesa_client
+from controllers.mpesa_utils import (
+    build_mpesa_reference,
+    is_mpesa_accepted,
+    is_mpesa_success,
+    normalize_msisdn,
+    normalize_mpesa_reference,
+)
 from models.models import Payment, Transaction, User, Wallet
 from schemas.schemas import WalletDepositRequest
 
@@ -36,6 +42,30 @@ def get_or_create_wallet(db: Session, user: User) -> Wallet:
 def get_wallet_balance(db: Session, user: User) -> Wallet:
     """Saldo da carteira."""
     return get_or_create_wallet(db, user)
+
+
+def _prepare_deposit_refs() -> tuple[str, str, str]:
+    """
+    Gera referências M-Pesa válidas (alfanuméricas, max 20 chars).
+    Retorna: (external_reference, transaction_ref, third_party_ref)
+    """
+    external_reference = build_mpesa_reference("CL")
+    transaction_ref = normalize_mpesa_reference(external_reference, fallback_prefix="TX")
+    third_party_ref = normalize_mpesa_reference(
+        external_reference,
+        fallback_prefix="TP",
+    )
+    return external_reference, transaction_ref, third_party_ref
+
+
+def _resolve_deposit_phone(user: User, phone: str | None) -> str:
+    raw = (phone or user.phone or "").strip()
+    if not raw:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Número de telemóvel é obrigatório para depósito M-Pesa.",
+        )
+    return normalize_msisdn(raw)
 
 
 def list_wallet_transactions(
@@ -93,12 +123,10 @@ async def create_deposit(db: Session, user: User, data: WalletDepositRequest) ->
     4. Callback do M-Pesa confirma o depósito automaticamente
     """
     wallet = get_or_create_wallet(db, user)
-    phone = (data.phone or user.phone).strip()
+    phone = _resolve_deposit_phone(user, data.phone)
     amount = Decimal(str(data.amount))
-    
-    # Gera referências únicas
-    transaction_ref = f"T{uuid.uuid4().hex[:12].upper()}"
-    external_reference = f"MPESA-{uuid.uuid4().hex[:12].upper()}"
+
+    external_reference, transaction_ref, third_party_ref = _prepare_deposit_refs()
 
     # Cria registro de pagamento (será atualizado com resposta do Mpesa)
     payment = Payment(
@@ -146,20 +174,18 @@ async def create_deposit(db: Session, user: User, data: WalletDepositRequest) ->
             transaction_reference=transaction_ref,
             customer_msisdn=phone,
             amount=float(amount),
-            third_party_reference=external_reference,
+            third_party_reference=third_party_ref,
         )
         
         payment.gateway_response = mpesa_response
         db.commit()
         
-        # Verifica resposta do M-Pesa
-        response_code = mpesa_response.get("output_ResponseCode", "").upper()
+        response_code = mpesa_response.get("output_ResponseCode", "")
         response_desc = mpesa_response.get("output_ResponseDesc", "")
         
         logger.info(f"M-Pesa C2B response: code={response_code}, desc={response_desc}")
         
-        # Se não foi aceito, marca como falha
-        if response_code not in ("INS0", "INS-0"):
+        if not is_mpesa_accepted(response_code):
             payment.status = PAYMENT_STATUS_FAILED
             transaction.status = "failed"
             db.commit()
@@ -246,12 +272,10 @@ async def create_deposit_with_polling(
         Dict com status final: confirmado/rejeitado/timeout
     """
     wallet = get_or_create_wallet(db, user)
-    phone = (data.phone or user.phone).strip()
+    phone = _resolve_deposit_phone(user, data.phone)
     amount = Decimal(str(data.amount))
-    
-    # Gera referências únicas
-    transaction_ref = f"T{uuid.uuid4().hex[:12].upper()}"
-    external_reference = f"MPESA-{uuid.uuid4().hex[:12].upper()}"
+
+    external_reference, transaction_ref, third_party_ref = _prepare_deposit_refs()
 
     # Cria registro de pagamento
     payment = Payment(
@@ -299,20 +323,18 @@ async def create_deposit_with_polling(
             transaction_reference=transaction_ref,
             customer_msisdn=phone,
             amount=float(amount),
-            third_party_reference=external_reference,
+            third_party_reference=third_party_ref,
         )
         
         payment.gateway_response = mpesa_response
         db.commit()
         
-        # Verifica resposta do M-Pesa
-        response_code = mpesa_response.get("output_ResponseCode", "").upper()
+        response_code = mpesa_response.get("output_ResponseCode", "")
         response_desc = mpesa_response.get("output_ResponseDesc", "")
         
         logger.info(f"M-Pesa C2B response: code={response_code}, desc={response_desc}")
         
-        # Se não foi aceito, marca como falha
-        if response_code not in ("INS0", "INS-0"):
+        if not is_mpesa_accepted(response_code):
             payment.status = PAYMENT_STATUS_FAILED
             transaction.status = "failed"
             db.commit()
@@ -329,19 +351,20 @@ async def create_deposit_with_polling(
         
         # ========== INS-0 ACEITO: Inicia Polling ==========
         conversation_id = mpesa_response.get("output_ConversationID", "")
-        third_party_ref = mpesa_response.get("output_ThirdPartyReference", external_reference)
+        transaction_id = mpesa_response.get("output_TransactionID", "")
+        third_party_ref_sent = mpesa_response.get("_third_party_reference", third_party_ref)
         
         logger.info(
             f"M-Pesa accepted (INS-0). Starting polling: "
             f"payment_id={payment.id}, conversation_id={conversation_id}"
         )
         
-        # Faz polling automático
         polling_result = await mpesa_client.wait_for_payment_confirmation_async(
-            conversation_id=conversation_id,
-            third_party_reference=third_party_ref,
+            conversation_id=conversation_id or transaction_ref,
+            third_party_reference=third_party_ref_sent,
             max_wait_seconds=max_wait_seconds,
             poll_interval_seconds=6,
+            transaction_id=transaction_id or conversation_id or transaction_ref,
         )
         
         # Processa resultado do polling
@@ -553,10 +576,14 @@ def process_mpesa_callback(payload: dict) -> dict:
                 "message": f"Pagamento já foi processado com status: {payment.status}",
             }
         
-        # ========== Sucesso: INS0 ==========
-        if response_code == "INS0":
-            user_id = payment.user_id
-            wallet = get_or_create_wallet(db, user_id)
+        # ========== Sucesso: INS-0 / INS0 ==========
+        if is_mpesa_success(response_code):
+            user = db.query(User).filter(User.id == payment.user_id).first()
+            if not user:
+                logger.error(f"User not found for payment {payment.id}")
+                return {"status": "error", "message": "Utilizador não encontrado"}
+
+            wallet = get_or_create_wallet(db, user)
             
             # Localiza a transação pendente
             transaction = (

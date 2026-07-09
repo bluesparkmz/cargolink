@@ -4,6 +4,7 @@ Inicializa FastAPI, rotas e tabelas na base de dados.
 """
 
 from contextlib import asynccontextmanager
+import logging
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -37,11 +38,17 @@ from routers.websocket_router import router as websocket_router
 # Importa modelos para o SQLAlchemy registar todas as tabelas
 import models.models  # noqa: F401
 
+logger = logging.getLogger(__name__)
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Cria tabelas ao arrancar (em dev; em produção usar migrações Alembic)."""
     Base.metadata.create_all(bind=engine)
+    logger.info(
+        "CargoLink API — M-Pesa sandbox | auto_confirm=%s",
+        settings.AUTO_CONFIRM_MPESA_DEPOSITS,
+    )
     yield
 
 

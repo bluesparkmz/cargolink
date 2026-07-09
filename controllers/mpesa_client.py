@@ -1,37 +1,57 @@
 """
 Cliente HTTP para integração com M-Pesa API (Sandbox).
+Alinhado com Skywallet: URLs com portas, refs normalizadas, polling.
 """
 
 import asyncio
 import logging
 import time
+from decimal import Decimal
 from typing import Any
 
 import httpx
 import requests
-from fastapi import HTTPException, status
 
 from config import settings
+from controllers.mpesa_utils import (
+    format_mpesa_amount,
+    is_mpesa_accepted,
+    normalize_mpesa_reference,
+)
 
 logger = logging.getLogger(__name__)
 
 
 class MpesaClient:
-    """Cliente para fazer requisições à API M-Pesa (suporta síncrono e assíncrono)."""
+    """Cliente para requisições à API M-Pesa (C2B + query + polling)."""
 
     def __init__(self):
-        self.base_url = settings.MPESA_HOST
-        self.bearer_token = settings.MPESA_BEARER_TOKEN
+        self.c2b_url = settings.MPESA_C2B_URL
+        self.query_url = settings.MPESA_QUERY_URL
         self.service_provider_code = settings.MPESA_SERVICE_PROVIDER_CODE
-        self.query_url = f"{self.base_url}/ipg/v1x/queryTransactionStatus/"
+        self.default_third_party_reference = settings.MPESA_THIRD_PARTY_REFERENCE
+        raw_token = settings.MPESA_BEARER_TOKEN or ""
+        self.bearer_token = raw_token.replace("Bearer ", "").strip()
+        logger.info("MpesaClient [sandbox] c2b=%s", self.c2b_url)
 
     def _get_headers(self) -> dict[str, str]:
-        """Headers necessários para todas as requisições."""
         return {
             "Content-Type": "application/json",
             "Authorization": f"Bearer {self.bearer_token}",
             "Origin": "developer.mpesa.vm.co.mz",
         }
+
+    def _resolve_references(
+        self,
+        transaction_reference: str,
+        third_party_reference: str | None,
+    ) -> tuple[str, str]:
+        tx_ref = normalize_mpesa_reference(transaction_reference, fallback_prefix="TX")
+        tp_ref = normalize_mpesa_reference(
+            third_party_reference or self.default_third_party_reference or transaction_reference,
+            fallback_prefix="TP",
+        )
+        return tx_ref, tp_ref
 
     async def initiate_payment_async(
         self,
@@ -40,133 +60,92 @@ class MpesaClient:
         amount: float,
         third_party_reference: str,
     ) -> dict[str, Any]:
-        """
-        Inicia pagamento C2B (Customer-to-Business) via M-Pesa - ASSÍNCRONO.
+        """Inicia pagamento C2B (Customer-to-Business) via M-Pesa."""
+        if not self.bearer_token:
+            logger.error("MPESA_BEARER_TOKEN não configurado.")
+            return {
+                "output_ResponseCode": "999",
+                "output_ResponseDesc": "Integração M-Pesa não configurada.",
+                "http_status": 503,
+            }
 
-        Args:
-            transaction_reference: Referência única da transação (ex: T12344C)
-            customer_msisdn: Número de telemóvel do cliente (ex: 258843330333)
-            amount: Valor a cobrar (ex: 10)
-            third_party_reference: Referência para rastreio (ex: H5QZ68)
-
-        Returns:
-            Resposta da API M-Pesa com confirmação ou erro.
-        """
-        url = f"{self.base_url}/ipg/v1x/c2bPayment/singleStage/"
-
+        tx_ref, tp_ref = self._resolve_references(transaction_reference, third_party_reference)
         payload = {
-            "input_TransactionReference": transaction_reference,
+            "input_TransactionReference": tx_ref,
             "input_CustomerMSISDN": customer_msisdn,
-            "input_Amount": str(amount),
-            "input_ThirdPartyReference": third_party_reference,
-            "input_ServiceProviderCode": self.service_provider_code,
+            "input_Amount": format_mpesa_amount(Decimal(str(amount))),
+            "input_ThirdPartyReference": tp_ref,
+            "input_ServiceProviderCode": self.service_provider_code or "171717",
         }
 
         try:
             logger.info(
-                f"M-Pesa payment request (async): {transaction_reference} "
-                f"for {customer_msisdn} (MT {amount})"
+                "M-Pesa C2B: tx=%s tp=%s msisdn=%s amount=%s",
+                tx_ref,
+                tp_ref,
+                customer_msisdn,
+                payload["input_Amount"],
             )
-            
-            async with httpx.AsyncClient(timeout=30, verify=False) as client:
+
+            async with httpx.AsyncClient(timeout=30, verify=True) as client:
                 response = await client.post(
-                    url,
+                    self.c2b_url,
                     json=payload,
                     headers=self._get_headers(),
                 )
-            
-            logger.info(f"M-Pesa HTTP {response.status_code}: {response.text[:200]}")
-            
-            # Tenta extrair JSON mesmo se status não for 200
+
+            logger.info("M-Pesa HTTP %s: %s", response.status_code, response.text[:300])
+
             try:
                 result = response.json()
-            except:
-                result = {"output_ResponseCode": "999", "output_ResponseDesc": f"HTTP {response.status_code}"}
-            
-            # Se não foi sucesso (2xx), adiciona o código de erro HTTP
+            except ValueError:
+                result = {
+                    "output_ResponseCode": "999",
+                    "output_ResponseDesc": f"HTTP {response.status_code}",
+                }
+
+            result["_transaction_reference"] = tx_ref
+            result["_third_party_reference"] = tp_ref
+
             if response.status_code >= 400:
                 result["http_status"] = response.status_code
-                logger.error(f"M-Pesa API error: {response.status_code} - {result}")
+                logger.error("M-Pesa API error %s: %s", response.status_code, result)
                 return result
-            
-            logger.info(f"M-Pesa response: {result}")
+
+            logger.info("M-Pesa C2B response: %s", result)
             return result
-            
-        except httpx.TimeoutException as e:
-            logger.error(f"M-Pesa timeout: {str(e)}")
+
+        except httpx.TimeoutException as exc:
+            logger.error("M-Pesa timeout: %s", exc)
             return {
                 "output_ResponseCode": "999",
                 "output_ResponseDesc": "Timeout ao contactar M-Pesa",
                 "http_status": 504,
             }
-        except httpx.RequestError as e:
-            logger.error(f"M-Pesa API error: {str(e)}")
+        except httpx.RequestError as exc:
+            logger.error("M-Pesa connection error: %s", exc)
             return {
                 "output_ResponseCode": "999",
-                "output_ResponseDesc": f"Erro de conexão: {str(e)[:100]}",
+                "output_ResponseDesc": f"Erro de conexão: {str(exc)[:100]}",
                 "http_status": 503,
             }
-        except Exception as e:
-            logger.error(f"M-Pesa unexpected error: {str(e)}", exc_info=True)
+        except Exception as exc:
+            logger.error("M-Pesa unexpected error: %s", exc, exc_info=True)
             return {
                 "output_ResponseCode": "999",
-                "output_ResponseDesc": f"Erro inesperado: {str(e)[:100]}",
+                "output_ResponseDesc": f"Erro inesperado: {str(exc)[:100]}",
                 "http_status": 500,
             }
-
-    def initiate_payment(
-        self,
-        transaction_reference: str,
-        customer_msisdn: str,
-        amount: float,
-        third_party_reference: str,
-    ) -> dict[str, Any]:
-        """
-        Wrapper síncrono para `initiate_payment_async`.
-        Use em contextos síncronos ou quando não puder usar async/await.
-        """
-        try:
-            # Tenta rodar assíncrono se houver event loop ativo
-            loop = asyncio.get_event_loop()
-            if loop.is_running():
-                # Em FastAPI async, não pode usar get_event_loop().run_until_complete()
-                # Vai retornar erro. Use initiate_payment_async() diretamente!
-                logger.warning("Usando initiate_payment() síncrono em contexto async!")
-                return {
-                    "success": False,
-                    "status": "failed",
-                    "message": "Use initiate_payment_async() em rotas async",
-                }
-            return asyncio.run(self.initiate_payment_async(
-                transaction_reference,
-                customer_msisdn,
-                amount,
-                third_party_reference,
-            ))
-        except RuntimeError:
-            # Sem event loop
-            return asyncio.run(self.initiate_payment_async(
-                transaction_reference,
-                customer_msisdn,
-                amount,
-                third_party_reference,
-            ))
 
     def query_payment_status(
         self,
         transaction_id: str,
         third_party_reference: str,
     ) -> dict[str, Any]:
-        """
-        Consulta o estado de um pagamento junto ao M-Pesa.
+        """Consulta estado de pagamento junto ao M-Pesa."""
+        if not self.bearer_token:
+            return {"success": False, "message": "M-Pesa token não configurado."}
 
-        Args:
-            transaction_id: ID ou ConversationID da transação no M-Pesa
-            third_party_reference: Referência do terceiro (ex: H5QZ68)
-
-        Returns:
-            Dicionário com o estado da transação.
-        """
         headers = {
             "Content-Type": "application/json",
             "Accept": "application/json",
@@ -175,16 +154,19 @@ class MpesaClient:
             "User-Agent": "Mozilla/5.0",
         }
 
+        tp_ref = normalize_mpesa_reference(
+            third_party_reference or self.default_third_party_reference,
+            fallback_prefix="TP",
+        )
         params = {
-            "input_ThirdPartyReference": third_party_reference,
+            "input_ThirdPartyReference": tp_ref,
             "input_QueryReference": transaction_id,
-            "input_ServiceProviderCode": self.service_provider_code,
+            "input_ServiceProviderCode": self.service_provider_code or "171717",
         }
 
         try:
-            logger.info(f"Querying M-Pesa status for transaction: {transaction_id}")
-            
-            # Tenta GET primeiro, depois POST se falhar
+            logger.info("M-Pesa query: ref=%s tp=%s", transaction_id, tp_ref)
+
             response = requests.get(
                 self.query_url,
                 headers=headers,
@@ -192,7 +174,7 @@ class MpesaClient:
                 verify=True,
                 timeout=30,
             )
-            
+
             if response.status_code in (405, 404):
                 response = requests.post(
                     self.query_url,
@@ -201,29 +183,29 @@ class MpesaClient:
                     verify=True,
                     timeout=30,
                 )
-            
+
             if response.status_code not in (200, 201):
-                logger.error(f"M-Pesa query error: {response.status_code}")
+                logger.error("M-Pesa query HTTP %s", response.status_code)
                 return {
                     "success": False,
                     "message": f"API error: {response.status_code}",
                 }
-            
+
             api_response = response.json()
             response_code = api_response.get("output_ResponseCode", "")
             response_desc = api_response.get("output_ResponseDesc", "")
-            
-            # Extrai status da transação (pode estar em vários campos)
             transaction_status = (
-                api_response.get("output_TransactionStatus")
+                api_response.get("status_da_transacao_resposta")
+                or api_response.get("status_da_transação_resposta")
+                or api_response.get("output_TransactionStatus")
                 or api_response.get("output_TransactionStatusDesc")
                 or api_response.get("output_TransactionStatusDescription")
                 or response_desc
                 or "Unknown"
             )
-            
-            logger.info(f"M-Pesa status response: {response_code} - {transaction_status}")
-            
+
+            logger.info("M-Pesa query: code=%s status=%s", response_code, transaction_status)
+
             return {
                 "success": True,
                 "response_code": response_code,
@@ -234,141 +216,31 @@ class MpesaClient:
         except requests.exceptions.Timeout:
             logger.error("M-Pesa query timeout")
             return {"success": False, "message": "M-Pesa API timeout"}
-        except Exception as e:
-            logger.error(f"Error querying M-Pesa status: {str(e)}")
-            return {"success": False, "message": str(e)}
+        except Exception as exc:
+            logger.error("Error querying M-Pesa status: %s", exc)
+            return {"success": False, "message": str(exc)}
 
-    def wait_for_payment_confirmation(
-        self,
-        conversation_id: str,
-        third_party_reference: str,
-        max_wait_seconds: int = 60,
-        poll_interval_seconds: int = 6,
-    ) -> dict[str, Any]:
-        """
-        Aguarda e verifica se o usuário confirmou o pagamento M-Pesa.
-        
-        Esta função faz polling (consultas periódicas) até que:
-        - O pagamento seja confirmado (sucesso)
-        - O pagamento seja rejeitado (falha)
-        - O tempo máximo de espera seja atingido (timeout)
-        
-        Args:
-            conversation_id: ID da conversa retornado por initiate_payment()
-            third_party_reference: Referência de terceiros (ex: H5QZ68)
-            max_wait_seconds: Tempo máximo de espera em segundos (padrão: 60 = 1 minuto)
-            poll_interval_seconds: Intervalo entre tentativas em segundos (padrão: 6)
-        
-        Returns:
-            Dict com resultado:
-            {
-                "confirmed": True/False,
-                "status": "confirmed"/"rejected"/"timeout",
-                "attempts": número de tentativas feitas,
-                "wait_time_seconds": tempo total de espera,
-                "query_result": resultado da última query,
-            }
-        """
-        start_time = time.time()
-        max_attempts = max(1, max_wait_seconds // poll_interval_seconds)
-        
-        logger.info(
-            f"Starting payment confirmation polling: conversation_id={conversation_id}, "
-            f"max_attempts={max_attempts}, poll_interval={poll_interval_seconds}s"
-        )
-        
-        for attempt in range(1, max_attempts + 1):
-            # Aguarda antes de cada tentativa (exceto a primeira)
-            if attempt > 1:
-                elapsed = time.time() - start_time
-                if elapsed >= max_wait_seconds:
-                    logger.warning(
-                        f"Payment confirmation timeout after {elapsed:.1f}s "
-                        f"(conversation_id={conversation_id})"
-                    )
-                    return {
-                        "confirmed": False,
-                        "status": "timeout",
-                        "attempts": attempt - 1,
-                        "wait_time_seconds": int(elapsed),
-                        "message": "Timeout aguardando confirmação do pagamento",
-                    }
-                time.sleep(poll_interval_seconds)
-            
-            # Query o status
-            query_result = self.query_payment_status(
-                transaction_id=conversation_id,
-                third_party_reference=third_party_reference,
-            )
-            
-            if not query_result.get("success"):
-                logger.debug(
-                    f"Payment status query failed (attempt {attempt}/{max_attempts}): "
-                    f"{query_result.get('message')}"
-                )
-                continue
-            
-            # Extrai o status da transação
-            status_text = query_result.get("transaction_status", "").strip().lower()
-            response_code = query_result.get("response_code", "")
-            
-            logger.debug(
-                f"Payment status (attempt {attempt}/{max_attempts}): "
-                f"status={status_text}, code={response_code}"
-            )
-            
-            # Verifica se foi confirmado
-            success_keywords = ["success", "sucesso", "completed", "concluido", 
-                              "approved", "aprovado", "accepted"]
-            if any(keyword in status_text for keyword in success_keywords):
-                elapsed = time.time() - start_time
-                logger.info(
-                    f"Payment CONFIRMED after {elapsed:.1f}s (attempt {attempt}): "
-                    f"conversation_id={conversation_id}, status={status_text}"
-                )
-                return {
-                    "confirmed": True,
-                    "status": "confirmed",
-                    "attempts": attempt,
-                    "wait_time_seconds": int(elapsed),
-                    "transaction_status": status_text,
-                    "response_code": response_code,
-                    "query_result": query_result,
-                }
-            
-            # Verifica se foi rejeitado
-            failed_keywords = ["failed", "falhou", "rejected", "rejeitado", 
-                             "cancelled", "cancelado", "declined", "error"]
-            if any(keyword in status_text for keyword in failed_keywords):
-                elapsed = time.time() - start_time
-                logger.warning(
-                    f"Payment REJECTED after {elapsed:.1f}s (attempt {attempt}): "
-                    f"conversation_id={conversation_id}, status={status_text}"
-                )
-                return {
-                    "confirmed": False,
-                    "status": "rejected",
-                    "attempts": attempt,
-                    "wait_time_seconds": int(elapsed),
-                    "transaction_status": status_text,
-                    "response_code": response_code,
-                    "query_result": query_result,
-                    "message": f"Pagamento rejeitado: {status_text}",
-                }
-        
-        # Timeout após todas as tentativas
-        elapsed = time.time() - start_time
-        logger.warning(
-            f"Payment confirmation timeout after {elapsed:.1f}s and {max_attempts} attempts: "
-            f"conversation_id={conversation_id}"
-        )
-        return {
-            "confirmed": False,
-            "status": "timeout",
-            "attempts": max_attempts,
-            "wait_time_seconds": int(elapsed),
-            "message": f"Timeout aguardando confirmação após {int(elapsed)}s",
-        }
+    def _evaluate_polling_result(self, query_result: dict[str, Any]) -> str | None:
+        """Retorna 'confirmed', 'rejected' ou None se ainda pendente."""
+        status_text = query_result.get("transaction_status", "").strip().lower()
+        response_code = query_result.get("response_code", "")
+
+        success_keywords = [
+            "success", "sucesso", "completed", "concluido", "concluído",
+            "approved", "aprovado", "accepted", "done", "pago",
+        ]
+        failed_keywords = [
+            "failed", "falhou", "rejected", "rejeitado", "cancelled",
+            "cancelado", "declined", "error", "expired", "falha",
+        ]
+
+        if is_mpesa_accepted(response_code) and any(kw in status_text for kw in success_keywords):
+            return "confirmed"
+        if any(kw in status_text for kw in failed_keywords):
+            return "rejected"
+        if is_mpesa_accepted(response_code) and status_text in ("", "unknown"):
+            return None
+        return None
 
     async def wait_for_payment_confirmation_async(
         self,
@@ -376,112 +248,96 @@ class MpesaClient:
         third_party_reference: str,
         max_wait_seconds: int = 60,
         poll_interval_seconds: int = 6,
+        transaction_id: str | None = None,
     ) -> dict[str, Any]:
         """
-        Versão assíncrona de wait_for_payment_confirmation().
-        Use em rotas FastAPI async.
+        Aguarda confirmação via polling (como Skywallet).
+        Usa output_TransactionID quando disponível para query.
         """
         start_time = time.time()
         max_attempts = max(1, max_wait_seconds // poll_interval_seconds)
-        
+        query_ref = transaction_id or conversation_id
+        failed_queries = 0
+
         logger.info(
-            f"Starting async payment confirmation polling: conversation_id={conversation_id}, "
-            f"max_attempts={max_attempts}, poll_interval={poll_interval_seconds}s"
+            "Polling M-Pesa: query_ref=%s tp=%s max=%ss",
+            query_ref,
+            third_party_reference,
+            max_wait_seconds,
         )
-        
+
         for attempt in range(1, max_attempts + 1):
-            # Aguarda antes de cada tentativa (exceto a primeira)
             if attempt > 1:
                 elapsed = time.time() - start_time
                 if elapsed >= max_wait_seconds:
-                    logger.warning(
-                        f"Payment confirmation timeout after {elapsed:.1f}s "
-                        f"(conversation_id={conversation_id})"
-                    )
-                    return {
-                        "confirmed": False,
-                        "status": "timeout",
-                        "attempts": attempt - 1,
-                        "wait_time_seconds": int(elapsed),
-                        "message": "Timeout aguardando confirmação do pagamento",
-                    }
+                    break
                 await asyncio.sleep(poll_interval_seconds)
-            
-            # Query o status
+
             query_result = self.query_payment_status(
-                transaction_id=conversation_id,
+                transaction_id=query_ref,
                 third_party_reference=third_party_reference,
             )
-            
+
             if not query_result.get("success"):
-                logger.debug(
-                    f"Payment status query failed (attempt {attempt}/{max_attempts}): "
-                    f"{query_result.get('message')}"
-                )
+                failed_queries += 1
+                if failed_queries >= 3:
+                    break
                 continue
-            
-            # Extrai o status da transação
-            status_text = query_result.get("transaction_status", "").strip().lower()
-            response_code = query_result.get("response_code", "")
-            
-            logger.debug(
-                f"Payment status (attempt {attempt}/{max_attempts}): "
-                f"status={status_text}, code={response_code}"
-            )
-            
-            # Verifica se foi confirmado
-            success_keywords = ["success", "sucesso", "completed", "concluido", 
-                              "approved", "aprovado", "accepted"]
-            if any(keyword in status_text for keyword in success_keywords):
-                elapsed = time.time() - start_time
-                logger.info(
-                    f"Payment CONFIRMED after {elapsed:.1f}s (attempt {attempt}): "
-                    f"conversation_id={conversation_id}, status={status_text}"
-                )
+
+            failed_queries = 0
+            verdict = self._evaluate_polling_result(query_result)
+            elapsed = int(time.time() - start_time)
+
+            if verdict == "confirmed":
+                logger.info("M-Pesa CONFIRMED após %ss (tentativa %s)", elapsed, attempt)
                 return {
                     "confirmed": True,
                     "status": "confirmed",
                     "attempts": attempt,
-                    "wait_time_seconds": int(elapsed),
-                    "transaction_status": status_text,
-                    "response_code": response_code,
+                    "wait_time_seconds": elapsed,
                     "query_result": query_result,
                 }
-            
-            # Verifica se foi rejeitado
-            failed_keywords = ["failed", "falhou", "rejected", "rejeitado", 
-                             "cancelled", "cancelado", "declined", "error"]
-            if any(keyword in status_text for keyword in failed_keywords):
-                elapsed = time.time() - start_time
-                logger.warning(
-                    f"Payment REJECTED after {elapsed:.1f}s (attempt {attempt}): "
-                    f"conversation_id={conversation_id}, status={status_text}"
-                )
+
+            if verdict == "rejected":
+                status_text = query_result.get("transaction_status", "")
+                logger.warning("M-Pesa REJECTED após %ss: %s", elapsed, status_text)
                 return {
                     "confirmed": False,
                     "status": "rejected",
                     "attempts": attempt,
-                    "wait_time_seconds": int(elapsed),
-                    "transaction_status": status_text,
-                    "response_code": response_code,
+                    "wait_time_seconds": elapsed,
                     "query_result": query_result,
                     "message": f"Pagamento rejeitado: {status_text}",
                 }
-        
-        # Timeout após todas as tentativas
-        elapsed = time.time() - start_time
-        logger.warning(
-            f"Payment confirmation timeout after {elapsed:.1f}s and {max_attempts} attempts: "
-            f"conversation_id={conversation_id}"
-        )
+
+        elapsed = int(time.time() - start_time)
+        logger.warning("M-Pesa polling timeout após %ss", elapsed)
         return {
             "confirmed": False,
             "status": "timeout",
             "attempts": max_attempts,
-            "wait_time_seconds": int(elapsed),
-            "message": f"Timeout aguardando confirmação após {int(elapsed)}s",
+            "wait_time_seconds": elapsed,
+            "message": f"Timeout aguardando confirmação após {elapsed}s",
         }
 
+    def wait_for_payment_confirmation(
+        self,
+        conversation_id: str,
+        third_party_reference: str,
+        max_wait_seconds: int = 60,
+        poll_interval_seconds: int = 6,
+        transaction_id: str | None = None,
+    ) -> dict[str, Any]:
+        """Wrapper síncrono para polling."""
+        return asyncio.run(
+            self.wait_for_payment_confirmation_async(
+                conversation_id=conversation_id,
+                third_party_reference=third_party_reference,
+                max_wait_seconds=max_wait_seconds,
+                poll_interval_seconds=poll_interval_seconds,
+                transaction_id=transaction_id,
+            )
+        )
 
-# Instância global
+
 mpesa_client = MpesaClient()

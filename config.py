@@ -1,4 +1,18 @@
+import logging
 import os
+
+logger = logging.getLogger(__name__)
+
+# M-Pesa sandbox apenas (produção será configurada mais tarde)
+MPESA_SANDBOX_HOST = "https://api.sandbox.vm.co.mz"
+MPESA_SANDBOX_C2B_URL = f"{MPESA_SANDBOX_HOST}:18352/ipg/v1x/c2bPayment/singleStage/"
+MPESA_SANDBOX_QUERY_URL = f"{MPESA_SANDBOX_HOST}:18353/ipg/v1x/queryTransactionStatus/"
+MPESA_SANDBOX_SERVICE_PROVIDER_CODE = "171717"
+MPESA_SANDBOX_THIRD_PARTY_REFERENCE = "11114"
+MPESA_SANDBOX_DEFAULT_TOKEN = (
+    "UELjHuIUTK0VelJ68L4gx95py5nLmoMhCL0R2iL/Q7N0IOzqmDS/MD6vvfeb6koVeKlmZoY/ritM44pY7g4TQKhKNm/CI7UwWgwkENIAUlV0m6mhU8KaSVILG8mmJsk21wJEJxLjNJQnLDyn+hQfMh/DxEOv4ZCid0crCRFtC/H6FWR9aQHnfbTMsnZVreKWDWFGbElQzVFAFfLHocC5Z+vv1ehY5uF92nUFuI7jnCHEsTsXWTpaa8BgXA93Qv/dVpyoCBM3fonCJ1OioIV04A3lkseuWX+6CpOnQVoHl/bKYlNwjd7yArRI7xlwWtbxt7Wz+RNJZDd1gzP2LnyXY++8z/naZ/sPTx56wHweYHJoeiveeKwWMUZ9k6pgF8Ka+ejRjl9U04AZQ4MFmabXKvf6sP+/ZHtcoGrQK7e9H9L5rzGtfp2fdCVRt/KpxHqfYGJWhpstmvAEQfsV+hPbVER4GSO3Rf+a+ECbaWbp7dBbOCkYXbb9dpvcAeZd6ACF4y8o9ClUPm1o3gOq1h9dB7jKbL4TAyBC1pTmtAefnTHv3gj2z0iRDquuDI7cMrcoL/3IEesYBouuR849/QA91Vo+M7YRdHjOnDys/5oYyVlMXPpm3bMxprS+hwiyfHlRNiA6rIGyJZNpuFummIgjmSb90bczaWmAz7WsOSYqZ4g="
+)
+
 
 def _env_bool(name: str, default: bool = False) -> bool:
     value = os.getenv(name)
@@ -25,8 +39,11 @@ class Settings:
     STORAGE_DIR: str
     GOOGLE_CLIENT_IDS: list[str]
     MPESA_HOST: str
+    MPESA_C2B_URL: str
+    MPESA_QUERY_URL: str
     MPESA_BEARER_TOKEN: str
     MPESA_SERVICE_PROVIDER_CODE: str
+    MPESA_THIRD_PARTY_REFERENCE: str
 
 
 settings = Settings()
@@ -34,7 +51,6 @@ settings.DATABASE_URL = os.getenv("DATABASE_URL")
 settings.SECRET_KEY = os.getenv("SECRET_KEY", "altere-esta-chave-em-producao")
 settings.ALGORITHM = os.getenv("ALGORITHM", "HS256")
 settings.ACCESS_TOKEN_EXPIRE_MINUTES = _env_int("ACCESS_TOKEN_EXPIRE_MINUTES", 60 * 24)
-settings.AUTO_CONFIRM_MPESA_DEPOSITS = _env_bool("AUTO_CONFIRM_MPESA_DEPOSITS", False)
 settings.STORAGE_DIR = os.getenv("STORAGE_DIR", "/storage")
 settings.GOOGLE_CLIENT_IDS = [
     client_id.strip()
@@ -45,10 +61,28 @@ settings.GOOGLE_CLIENT_IDS = [
     if client_id.strip()
 ]
 
-# M-Pesa Sandbox Configuration
-settings.MPESA_HOST = os.getenv("MPESA_HOST", "https://api.sandbox.vm.co.mz")
-settings.MPESA_BEARER_TOKEN = os.getenv(
-    "MPESA_BEARER_TOKEN",
-    "UELjHuIUTK0VelJ68L4gx95py5nLmoMhCL0R2iL/Q7N0IOzqmDS/MD6vvfeb6koVeKlmZoY/ritM44pY7g4TQKhKNm/CI7UwWgwkENIAUlV0m6mhU8KaSVILG8mmJsk21wJEJxLjNJQnLDyn+hQfMh/DxEOv4ZCid0crCRFtC/H6FWR9aQHnfbTMsnZVreKWDWFGbElQzVFAFfLHocC5Z+vv1ehY5uF92nUFuI7jnCHEsTsXWTpaa8BgXA93Qv/dVpyoCBM3fonCJ1OioIV04A3lkseuWX+6CpOnQVoHl/bKYlNwjd7yArRI7xlwWtbxt7Wz+RNJZDd1gzP2LnyXY++8z/naZ/sPTx56wHweYHJoeiveeKwWMUZ9k6pgF8Ka+ejRjl9U04AZQ4MFmabXKvf6sP+/ZHtcoGrQK7e9H9L5rzGtfp2fdCVRt/KpxHqfYGJWhpstmvAEQfsV+hPbVER4GSO3Rf+a+ECbaWbp7dBbOCkYXbb9dpvcAeZd6ACF4y8o9ClUPm1o3gOq1h9dB7jKbL4TAyBC1pTmtAefnTHv3gj2z0iRDquuDI7cMrcoL/3IEesYBouuR849/QA91Vo+M7YRdHjOnDys/5oYyVlMXPpm3bMxprS+hwiyfHlRNiA6rIGyJZNpuFummIgjmSb90bczaWmAz7WsOSYqZ4g=",
+# ----- M-Pesa sandbox (único ambiente activo por agora) -----
+settings.MPESA_HOST = os.getenv("MPESA_HOST", MPESA_SANDBOX_HOST)
+settings.MPESA_C2B_URL = os.getenv("MPESA_C2B_URL", MPESA_SANDBOX_C2B_URL)
+settings.MPESA_QUERY_URL = os.getenv("MPESA_QUERY_URL", MPESA_SANDBOX_QUERY_URL)
+settings.MPESA_SERVICE_PROVIDER_CODE = os.getenv(
+    "MPESA_SERVICE_PROVIDER_CODE",
+    MPESA_SANDBOX_SERVICE_PROVIDER_CODE,
 )
-settings.MPESA_SERVICE_PROVIDER_CODE = os.getenv("MPESA_SERVICE_PROVIDER_CODE", "171717")
+settings.MPESA_THIRD_PARTY_REFERENCE = os.getenv(
+    "MPESA_THIRD_PARTY_REFERENCE",
+    MPESA_SANDBOX_THIRD_PARTY_REFERENCE,
+)
+
+_token = (os.getenv("MPESA_BEARER_TOKEN") or os.getenv("MPESA_TOKEN") or "").strip()
+settings.MPESA_BEARER_TOKEN = _token or MPESA_SANDBOX_DEFAULT_TOKEN
+
+# false = fluxo real sandbox + polling | true = credita sem chamar M-Pesa
+settings.AUTO_CONFIRM_MPESA_DEPOSITS = _env_bool("AUTO_CONFIRM_MPESA_DEPOSITS", False)
+
+logger.info(
+    "M-Pesa [sandbox] C2B=%s | provider=%s | token=%s",
+    settings.MPESA_C2B_URL,
+    settings.MPESA_SERVICE_PROVIDER_CODE,
+    "ok" if settings.MPESA_BEARER_TOKEN else "MISSING",
+)
