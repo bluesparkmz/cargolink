@@ -178,7 +178,7 @@ async def create_deposit(db: Session, user: User, data: WalletDepositRequest) ->
             third_party_reference=third_party_ref,
         )
         
-        payment.gateway_response = mpesa_response
+        payment.gateway_response = {"c2b": mpesa_response}
         db.commit()
         
         response_code = mpesa_response.get("output_ResponseCode", "")
@@ -195,14 +195,27 @@ async def create_deposit(db: Session, user: User, data: WalletDepositRequest) ->
                 "payment_id": payment.id,
                 "transaction_id": transaction.id,
                 "amount": float(amount),
-                "status": "failed",  # Frontend espera inglês
+                "status": "failed",
                 "external_reference": external_reference,
                 "phone": phone,
                 "message": f"M-Pesa rejeitou: {response_desc}",
             }
-        
-        # ========== INS-0 ACEITO: Retorna PENDING (callback virá depois) ==========
-        logger.info(f"M-Pesa accepted (INS-0). Waiting for callback: payment_id={payment.id}")
+
+        # Modo teste: M-Pesa aceitou (INS-0 / HTTP 200) → credita sem PIN
+        if settings.MPESA_AUTO_CREDIT_ON_ACCEPT:
+            logger.info(f"M-Pesa INS-0 auto-credit: payment_id={payment.id}")
+            _complete_deposit(db, wallet, payment, transaction)
+            return {
+                "payment_id": payment.id,
+                "transaction_id": transaction.id,
+                "amount": float(amount),
+                "status": "completed",
+                "external_reference": external_reference,
+                "phone": phone,
+                "message": "Depósito confirmado. Saldo actualizado.",
+            }
+
+        logger.info(f"M-Pesa accepted (INS-0). Waiting for PIN: payment_id={payment.id}")
         
         return {
             "payment_id": payment.id,
@@ -327,7 +340,7 @@ async def create_deposit_with_polling(
             third_party_reference=third_party_ref,
         )
         
-        payment.gateway_response = mpesa_response
+        payment.gateway_response = {"c2b": mpesa_response}
         db.commit()
         
         response_code = mpesa_response.get("output_ResponseCode", "")
@@ -349,8 +362,20 @@ async def create_deposit_with_polling(
                 "phone": phone,
                 "message": f"M-Pesa rejeitou: {response_desc}",
             }
+
+        if settings.MPESA_AUTO_CREDIT_ON_ACCEPT:
+            logger.info(f"M-Pesa INS-0 auto-credit (polling route): payment_id={payment.id}")
+            _complete_deposit(db, wallet, payment, transaction)
+            return {
+                "payment_id": payment.id,
+                "transaction_id": transaction.id,
+                "amount": float(amount),
+                "status": "completed",
+                "external_reference": external_reference,
+                "phone": phone,
+                "message": "Depósito confirmado. Saldo actualizado.",
+            }
         
-        # ========== INS-0 ACEITO: Inicia Polling ==========
         conversation_id = mpesa_response.get("output_ConversationID", "")
         third_party_ref_sent = mpesa_response.get("_third_party_reference", third_party_ref)
         
@@ -493,6 +518,108 @@ def get_deposit_status(db: Session, user: User, payment_id: int) -> dict:
         "external_reference": payment.external_reference or "",
         "phone": payment.phone or user.phone,
         "message": messages.get(mapped_status, "Estado do depósito actualizado."),
+    }
+
+
+def sync_deposit_with_mpesa(db: Session, user: User, payment_id: int) -> dict:
+    """
+    Consulta M-Pesa (verificador) e actualiza o depósito pendente.
+    Chamado pelo frontend a cada poucos segundos (máx. ~60s).
+    """
+    payment = db.query(Payment).filter(Payment.id == payment_id).first()
+    if payment is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Pagamento não encontrado")
+    if payment.user_id != user.id:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Sem acesso")
+    if payment.method != PAYMENT_METHOD_MPESA or payment.load_id is not None:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Pagamento inválido para depósito na carteira",
+        )
+
+    status_map = {
+        PAYMENT_STATUS_COMPLETED: "completed",
+        PAYMENT_STATUS_PENDING: "pending",
+        PAYMENT_STATUS_FAILED: "failed",
+    }
+
+    if payment.status in (PAYMENT_STATUS_COMPLETED, PAYMENT_STATUS_FAILED):
+        mapped = status_map.get(payment.status, payment.status)
+        return {
+            "payment_id": payment.id,
+            "amount": float(payment.amount),
+            "status": mapped,
+            "external_reference": payment.external_reference or "",
+            "phone": payment.phone or user.phone,
+            "message": "Depósito confirmado." if mapped == "completed" else "Depósito cancelado ou rejeitado.",
+        }
+
+    gateway = payment.gateway_response if isinstance(payment.gateway_response, dict) else {}
+    c2b_response = gateway.get("c2b") if isinstance(gateway.get("c2b"), dict) else gateway
+    tx_ref = c2b_response.get("_transaction_reference") or payment.external_reference or ""
+    tp_ref = c2b_response.get("_third_party_reference") or payment.external_reference or ""
+
+    query_result = mpesa_client.query_status_with_candidates(c2b_response, tx_ref, tp_ref)
+
+    wallet = get_or_create_wallet(db, user)
+    transaction = (
+        db.query(Transaction)
+        .filter(
+            Transaction.wallet_id == wallet.id,
+            Transaction.reference == payment.external_reference,
+        )
+        .first()
+    )
+
+    if not query_result.get("success"):
+        return {
+            "payment_id": payment.id,
+            "amount": float(payment.amount),
+            "status": "pending",
+            "external_reference": payment.external_reference or "",
+            "phone": payment.phone or user.phone,
+            "message": "A aguardar confirmação no telemóvel...",
+        }
+
+    final_state = query_result.get("status")
+    payment.gateway_response = {
+        "c2b": c2b_response,
+        "last_query": query_result,
+    }
+
+    if final_state == "success" and transaction:
+        _complete_deposit(db, wallet, payment, transaction)
+        return {
+            "payment_id": payment.id,
+            "amount": float(payment.amount),
+            "status": "completed",
+            "external_reference": payment.external_reference or "",
+            "phone": payment.phone or user.phone,
+            "message": "Depósito confirmado. Saldo actualizado.",
+        }
+
+    if final_state == "failed":
+        payment.status = PAYMENT_STATUS_FAILED
+        if transaction:
+            transaction.status = "failed"
+        db.commit()
+        return {
+            "payment_id": payment.id,
+            "amount": float(payment.amount),
+            "status": "failed",
+            "external_reference": payment.external_reference or "",
+            "phone": payment.phone or user.phone,
+            "message": query_result.get("response_description") or "Pagamento cancelado ou rejeitado.",
+        }
+
+    db.commit()
+    return {
+        "payment_id": payment.id,
+        "amount": float(payment.amount),
+        "status": "pending",
+        "external_reference": payment.external_reference or "",
+        "phone": payment.phone or user.phone,
+        "message": "Confirme o pagamento no seu telemóvel.",
     }
 
 

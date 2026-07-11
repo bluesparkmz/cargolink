@@ -1,6 +1,5 @@
 """
 Cliente M-Pesa — polling e classificação iguais ao Skywallet.
-Só confirma depósito quando query_status devolve status=success.
 """
 
 import asyncio
@@ -23,11 +22,44 @@ from controllers.mpesa_utils import (
 logger = logging.getLogger(__name__)
 
 MPESA_POLL_MAX_RETRIES = 10
-MPESA_POLL_INTERVAL_SECONDS = 6
+MPESA_POLL_INTERVAL_SECONDS = 3  # 10 × 3s = 30s no backend; front continua até 60s
+
+
+def build_query_candidates(
+    c2b_response: dict[str, Any] | None,
+    transaction_reference: str,
+    third_party_reference: str,
+) -> list[str]:
+    """Referências para query M-Pesa (Skywallet — várias candidatas)."""
+    c2b = c2b_response or {}
+    ordered = [
+        c2b.get("output_TransactionID"),
+        c2b.get("output_ConversationID"),
+        c2b.get("output_ThirdPartyReference"),
+        c2b.get("_third_party_reference"),
+        c2b.get("_transaction_reference"),
+        third_party_reference,
+        transaction_reference,
+        c2b.get("external_reference"),
+    ]
+    candidates: list[str] = []
+    seen: set[str] = set()
+    for value in ordered:
+        if value is None:
+            continue
+        normalized = str(value).strip()
+        if not normalized:
+            continue
+        key = normalized.upper()
+        if key in seen:
+            continue
+        seen.add(key)
+        candidates.append(normalized)
+    return candidates
 
 
 class MpesaClient:
-    """Cliente M-Pesa sandbox (C2B + query + polling Skywallet)."""
+    """Cliente M-Pesa sandbox (C2B + query + polling)."""
 
     def __init__(self):
         self.c2b_url = settings.MPESA_C2B_URL
@@ -36,7 +68,7 @@ class MpesaClient:
         self.default_third_party_reference = settings.MPESA_THIRD_PARTY_REFERENCE
         raw_token = settings.MPESA_BEARER_TOKEN or ""
         self.bearer_token = raw_token.replace("Bearer ", "").strip()
-        logger.info("MpesaClient [sandbox] c2b=%s", self.c2b_url)
+        logger.info("MpesaClient query_url=%s", self.query_url)
 
     def _auth_headers(self) -> dict[str, str]:
         return {
@@ -66,7 +98,6 @@ class MpesaClient:
         amount: float,
         third_party_reference: str,
     ) -> dict[str, Any]:
-        """Inicia pagamento C2B."""
         if not self.bearer_token:
             return {
                 "output_ResponseCode": "999",
@@ -84,10 +115,7 @@ class MpesaClient:
         }
 
         try:
-            logger.info(
-                "M-Pesa C2B: tx=%s tp=%s msisdn=%s amount=%s",
-                tx_ref, tp_ref, customer_msisdn, payload["input_Amount"],
-            )
+            logger.info("M-Pesa C2B: tx=%s tp=%s msisdn=%s", tx_ref, tp_ref, customer_msisdn)
             async with httpx.AsyncClient(timeout=60, verify=True) as client:
                 response = await client.post(
                     self.c2b_url,
@@ -110,16 +138,10 @@ class MpesaClient:
 
             if response.status_code not in (200, 201):
                 result["http_status"] = response.status_code
-                return result
-
             return result
 
         except httpx.TimeoutException:
-            return {
-                "output_ResponseCode": "999",
-                "output_ResponseDesc": "Timeout ao contactar M-Pesa",
-                "http_status": 504,
-            }
+            return {"output_ResponseCode": "999", "output_ResponseDesc": "Timeout M-Pesa", "http_status": 504}
         except httpx.RequestError as exc:
             return {
                 "output_ResponseCode": "999",
@@ -127,14 +149,30 @@ class MpesaClient:
                 "http_status": 503,
             }
 
+    def _request_query(self, params: dict[str, str]) -> requests.Response:
+        """POST primeiro (sandbox bloqueia GET com 403), depois GET."""
+        headers = self._auth_headers()
+        response = requests.post(
+            self.query_url, headers=headers, json=params, verify=True, timeout=60,
+        )
+        if response.status_code in (403, 404, 405):
+            logger.warning(
+                "M-Pesa query POST http=%s, retry GET ref=%s",
+                response.status_code,
+                params.get("input_QueryReference"),
+            )
+            response = requests.get(
+                self.query_url, headers=headers, params=params, verify=True, timeout=60,
+            )
+        return response
+
     def query_status(
         self,
         reference: str,
         third_party_ref: str | None = None,
     ) -> dict[str, Any]:
-        """Consulta estado — devolve status: success | failed | pending (Skywallet)."""
         if not self.bearer_token:
-            return {"success": False, "status": "failed", "message": "Token M-Pesa não configurado."}
+            return {"success": False, "message": "Token M-Pesa não configurado."}
 
         tp_ref = third_party_ref or self.default_third_party_reference or "11114"
         params = {
@@ -143,31 +181,17 @@ class MpesaClient:
             "input_ServiceProviderCode": self.service_provider_code or "171717",
         }
 
-        logger.info(
-            "M-Pesa query_status: query_ref=%s tp=%s",
-            params["input_QueryReference"],
-            params["input_ThirdPartyReference"],
-        )
-
         try:
-            headers = self._auth_headers()
-            response = requests.get(
-                self.query_url, headers=headers, params=params, verify=True, timeout=60,
-            )
-            if response.status_code in (403, 404, 405):
-                response = requests.post(
-                    self.query_url, headers=headers, json=params, verify=True, timeout=60,
-                )
+            response = self._request_query(params)
 
             if response.status_code not in (200, 201):
+                preview = (response.text or "")[:200]
                 logger.warning(
-                    "M-Pesa query_status HTTP %s ref=%s",
-                    response.status_code,
-                    reference,
+                    "M-Pesa query HTTP %s ref=%s tp=%s preview=%s",
+                    response.status_code, reference, tp_ref, preview,
                 )
                 return {
                     "success": False,
-                    "status": "failed",
                     "message": "Serviço da operadora indisponível.",
                     "http_status": response.status_code,
                 }
@@ -181,7 +205,7 @@ class MpesaClient:
             )
 
             logger.info(
-                "M-Pesa query_status: ref=%s code=%s tx_status=%s classified=%s",
+                "M-Pesa query OK: ref=%s code=%s tx=%s -> %s",
                 reference, response_code, transaction_status, classification,
             )
 
@@ -192,10 +216,34 @@ class MpesaClient:
                 "response_description": response_description,
                 "transaction_status": transaction_status,
                 "api_response": api_response,
+                "query_reference": reference,
             }
         except Exception as exc:
-            logger.error("M-Pesa query_status error: %s", exc, exc_info=True)
-            return {"success": False, "status": "failed", "message": str(exc)}
+            logger.error("M-Pesa query error: %s", exc, exc_info=True)
+            return {"success": False, "message": str(exc)}
+
+    def query_status_with_candidates(
+        self,
+        c2b_response: dict[str, Any] | None,
+        transaction_reference: str,
+        third_party_reference: str,
+    ) -> dict[str, Any]:
+        """Tenta várias referências até obter resposta válida do verificador."""
+        tp_ref = (
+            (c2b_response or {}).get("_third_party_reference")
+            or third_party_reference
+            or self.default_third_party_reference
+        )
+        candidates = build_query_candidates(c2b_response, transaction_reference, third_party_reference)
+        last_result: dict[str, Any] = {"success": False, "message": "Sem referências de query."}
+
+        for candidate in candidates:
+            result = self.query_status(reference=candidate, third_party_ref=tp_ref)
+            last_result = result
+            if result.get("success"):
+                return result
+
+        return last_result
 
     async def wait_for_payment_confirmation_async(
         self,
@@ -206,36 +254,26 @@ class MpesaClient:
         max_retries: int = MPESA_POLL_MAX_RETRIES,
         poll_interval_seconds: int = MPESA_POLL_INTERVAL_SECONDS,
     ) -> dict[str, Any]:
-        """
-        Polling Skywallet: 10 tentativas × 6s, sleep antes de cada query.
-        Só retorna success quando query_status.classified == success.
-        """
-        query_ref = (
-            c2b_response.get("output_TransactionID")
-            or c2b_response.get("output_ConversationID")
-            or transaction_reference
-        )
-        tp_ref = c2b_response.get("_third_party_reference") or third_party_reference
-
         logger.info(
-            "M-Pesa polling start: query_ref=%s tp=%s retries=%s interval=%ss",
-            query_ref, tp_ref, max_retries, poll_interval_seconds,
+            "M-Pesa polling: retries=%s interval=%ss candidates=%s",
+            max_retries,
+            poll_interval_seconds,
+            build_query_candidates(c2b_response, transaction_reference, third_party_reference),
         )
 
         for attempt in range(1, max_retries + 1):
             await asyncio.sleep(poll_interval_seconds)
 
-            status_result = self.query_status(
-                reference=str(query_ref),
-                third_party_ref=tp_ref,
+            status_result = self.query_status_with_candidates(
+                c2b_response, transaction_reference, third_party_reference,
             )
 
             if not status_result.get("success"):
-                logger.debug("M-Pesa poll %s/%s: query failed", attempt, max_retries)
+                logger.debug("M-Pesa poll %s/%s: query indisponível", attempt, max_retries)
                 continue
 
             final_state = status_result.get("status")
-            logger.info("M-Pesa poll %s/%s: state=%s", attempt, max_retries, final_state)
+            logger.info("M-Pesa poll %s/%s: %s", attempt, max_retries, final_state)
 
             if final_state == "success":
                 return {
@@ -252,22 +290,17 @@ class MpesaClient:
                     "attempts": attempt,
                     "wait_time_seconds": attempt * poll_interval_seconds,
                     "query_result": status_result,
-                    "message": status_result.get("response_description") or "Pagamento falhou ou cancelado.",
+                    "message": status_result.get("response_description") or "Pagamento cancelado ou rejeitado.",
                 }
 
         return {
             "status": "pending",
             "attempts": max_retries,
             "wait_time_seconds": max_retries * poll_interval_seconds,
-            "message": "Depósito aceite; confirmação ainda pendente.",
+            "message": "Confirmação ainda pendente. Verifique no telemóvel.",
         }
 
-    # Alias retrocompatível
-    def query_payment_status(
-        self,
-        transaction_id: str,
-        third_party_reference: str,
-    ) -> dict[str, Any]:
+    def query_payment_status(self, transaction_id: str, third_party_reference: str) -> dict[str, Any]:
         return self.query_status(reference=transaction_id, third_party_ref=third_party_reference)
 
 

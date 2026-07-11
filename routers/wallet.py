@@ -13,6 +13,7 @@ from controllers.wallet_controller import (
     get_wallet_balance,
     list_wallet_transactions,
     process_mpesa_callback,
+    sync_deposit_with_mpesa,
 )
 from database import get_db
 from deps import get_current_user
@@ -79,12 +80,22 @@ async def request_deposit_with_polling(
     Use esta rota para fluxo mais direto sem callbacks de webhook.
     """
     return await create_deposit_with_polling(
-        db, 
-        current_user, 
+        db,
+        current_user,
         data,
-        max_wait_seconds=60  # Espera até 60 segundos
+        max_wait_seconds=30,
     )
 
+
+
+@router.post("/deposits/{payment_id}/sync", response_model=WalletDepositStatusResponse)
+def sync_deposit_route(
+    payment_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Consulta verificador M-Pesa e actualiza estado (polling do app)."""
+    return sync_deposit_with_mpesa(db, current_user, payment_id)
 
 
 @router.get("/deposits/{payment_id}/status", response_model=WalletDepositStatusResponse)
