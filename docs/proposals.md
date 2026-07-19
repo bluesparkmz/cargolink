@@ -53,6 +53,34 @@ recusada
 
 ## Modelo de negociacao
 
+Negociacao por contrapropostas com regras de negocio:
+
+```text
+loads.valor              = valor indicado pelo dono da carga (referencia/orcamento)
+load_proposals.valor     = oferta inicial da empresa (>= valor da carga, se existir)
+proposal_negotiations    = ajustes depois da proposta inicial
+```
+
+Regras de valor:
+
+```text
+1. Empresa envia proposta inicial >= valor indicado na carga
+2. Cliente pode aceitar, recusar ou contrapropor um valor MENOR
+3. Empresa responde com valor MAIOR que a oferta do cliente
+4. Empresa nao pode ultrapassar a sua proposta inicial
+5. O ciclo repete ate aceite ou recusa
+```
+
+Exemplo:
+
+```text
+Carga publicada:     30.000 MT (valor indicado)
+Empresa propoe:      32.000 MT
+Cliente contrapropoe: 28.000 MT
+Empresa contrapropoe: 29.000 MT
+Cliente aceita:      29.000 MT -> viagem criada
+```
+
 Tabela:
 
 ```text
@@ -376,6 +404,8 @@ Regras:
 
 - A carga precisa aceitar negociacao (`negotiable = true`).
 - A proposta nao pode estar `aceite` nem `recusada`.
+- **Cliente**: contraproposta deve ser **inferior** ao valor em vigor.
+- **Empresa**: contraproposta deve ser **superior** a oferta do cliente e **nao pode ultrapassar** a proposta inicial.
 - A empresa nao pode iniciar nova contraproposta sem resposta do cliente.
 - Quem enviou a ultima contraproposta pendente precisa aguardar a outra parte.
 - Ao criar contraproposta, a proposta fica `em_negociacao`.

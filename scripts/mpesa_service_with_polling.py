@@ -341,7 +341,7 @@ def esperar_confirmacao_pagamento(
 if __name__ == "__main__":
     # Dados de teste fornecidos pelo usuário
     input_TransactionReference = "T12344C"
-    input_CustomerMSISDN = "258848451424"
+    input_CustomerMSISDN = "258852411827"
     input_Amount = 10.0
     input_ThirdPartyReference = "221ZPP"
     input_ServiceProviderCode = "171717"

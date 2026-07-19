@@ -801,6 +801,18 @@ def create_proposal(
             detail="Já enviou proposta para esta carga",
         )
 
+    if data.proposed_value is not None and load.value is not None:
+        proposed = Decimal(str(data.proposed_value))
+        client_value = Decimal(str(load.value))
+        if proposed < client_value:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=(
+                    f"A proposta deve ser pelo menos {client_value:.2f} MT "
+                    f"(valor indicado pelo dono da carga)."
+                ),
+            )
+
     proposal = LoadProposal(
         load_id=load_id,
         company_id=company.id,

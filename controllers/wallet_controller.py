@@ -221,12 +221,12 @@ async def create_deposit(db: Session, user: User, data: WalletDepositRequest) ->
             "payment_id": payment.id,
             "transaction_id": transaction.id,
             "amount": float(amount),
-            "status": "pending",  # Frontend espera inglês
+            "status": "pending",
             "external_reference": external_reference,
             "phone": phone,
             "message": (
-                "Depósito iniciado. Confirme no seu telemóvel para completar. "
-                "Receberá SMS com código de confirmação."
+                "Pedido enviado à Vodacom M-Pesa. "
+                "Verifique o diálogo de PIN no seu telemóvel e confirme o pagamento."
             ),
         }
         

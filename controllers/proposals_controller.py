@@ -126,6 +126,70 @@ def _latest_pending_negotiation(
     return pending[0] if pending else None
 
 
+def _standing_amount(proposal: LoadProposal) -> Decimal:
+    """Valor em vigor na mesa: ultima contraproposta pendente ou proposta inicial."""
+    latest_pending = _latest_pending_negotiation(proposal)
+    if latest_pending is not None:
+        return latest_pending.amount
+    if proposal.proposed_value is not None:
+        return proposal.proposed_value
+    return Decimal("0")
+
+
+def _validate_counter_offer_amount(
+    proposal: LoadProposal,
+    user_side: str,
+    amount: Decimal,
+) -> None:
+    """
+    Regras de negociacao:
+    - Cliente so pode baixar o valor em vigor.
+    - Empresa so pode subir em relacao a oferta do cliente, sem passar a proposta inicial.
+    """
+    standing = _standing_amount(proposal)
+
+    if user_side == "cliente":
+        if standing <= 0:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Nao ha valor em vigor para contrapropor.",
+            )
+        if amount >= standing:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=(
+                    f"O cliente so pode sugerir um valor inferior ao actual "
+                    f"({standing:.2f} MT)."
+                ),
+            )
+        return
+
+    latest_pending = _latest_pending_negotiation(proposal)
+    if latest_pending is None:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="A empresa so responde a uma contraproposta do cliente.",
+        )
+
+    client_offer = latest_pending.amount
+    empresa_ceiling = proposal.proposed_value or standing
+    if amount <= client_offer:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=(
+                f"A empresa deve sugerir um valor superior a {client_offer:.2f} MT "
+                f"(oferta do cliente)."
+            ),
+        )
+    if amount > empresa_ceiling:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=(
+                f"A empresa nao pode ultrapassar a proposta inicial ({empresa_ceiling:.2f} MT)."
+            ),
+        )
+
+
 def _ensure_open_for_negotiation(proposal: LoadProposal) -> None:
     if proposal.status in (PROPOSAL_STATUS_ACCEPTED, PROPOSAL_STATUS_REJECTED):
         raise HTTPException(
@@ -317,6 +381,7 @@ def create_counter_offer(
     user_side = _user_side_for_proposal(db, user, proposal)
     _ensure_open_for_negotiation(proposal)
     _ensure_load_allows_negotiation(proposal)
+    _validate_counter_offer_amount(proposal, user_side, Decimal(str(data.amount)))
 
     latest_pending = _latest_pending_negotiation(proposal)
     if latest_pending is None and user_side == "empresa":
