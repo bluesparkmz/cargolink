@@ -753,11 +753,11 @@ class TripDriverSummary(BaseModel):
     id: int
     user_id: int
     company_id: int | None = None
-    license_number: str
-    years_experience: int
-    average_rating: float
-    total_trips: int
-    available: bool
+    license_number: str | None = None
+    years_experience: int | None = 0
+    average_rating: float | None = 0.0
+    total_trips: int | None = 0
+    available: bool | None = True
     current_lat: float | None = None
     current_lng: float | None = None
     location_updated_at: datetime | None = None
