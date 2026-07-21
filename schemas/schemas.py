@@ -596,6 +596,59 @@ class LoadProposalResponse(BaseModel):
     load_id: int
     company_id: int | None = None
     driver_id: int | None = None
+    vehicle_id: int | None = None
+    proposed_value: float | None = None
+    message: str | None = None
+    status: str
+    created_at: datetime
+
+    model_config = {"from_attributes": True}
+
+
+class ProposalLoadSummary(BaseModel):
+    """Resumo da carga ligada a proposta."""
+
+    id: int
+    code: str
+    load_type: str
+    load_name: str | None = None
+    origin: str
+    destination: str
+    value: float | None = None
+    negotiable: bool = True
+    status: str
+    departure_date: date | None = None
+
+
+class ProposalCompanySummary(BaseModel):
+    """Resumo da empresa que fez a proposta."""
+
+    id: int
+    company_name: str
+    average_rating: float = 0.0
+    total_trips: int = 0
+    verified: bool = False
+    logo_url: str | None = None
+
+
+class ProposalDriverSummary(BaseModel):
+    """Resumo do motorista atribuido a proposta."""
+
+    id: int
+    name: str
+    average_rating: float = 0.0
+    total_trips: int = 0
+    available: bool = True
+    avatar_url: str | None = None
+
+
+class ProposalVehicleSummary(BaseModel):
+    """Resumo do veiculo atribuido a proposta."""
+
+    id: int
+    plate: str
+    brand: str | None = None
+    model_name: str | None = None
     vehicle_type: str | None = None
     tonnage_capacity: float | None = None
     status: str
