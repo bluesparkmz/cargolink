@@ -778,6 +778,12 @@ class TripResponse(BaseModel):
     driver_id: int | None
     vehicle_id: int | None
     status: str
+    origin: str | None = None
+    destination: str | None = None
+    origin_lat: float | None = None
+    origin_lng: float | None = None
+    destination_lat: float | None = None
+    destination_lng: float | None = None
     started_at: datetime | None = None
     arrived_at: datetime | None = None
     client_confirmed_at: datetime | None = None
@@ -823,8 +829,6 @@ class TripLocationResponse(BaseModel):
     model_config = {"from_attributes": True}
 
 
-# ---------------------------------------------------------------------------
-# App motorista — viagens e paragens
 # ---------------------------------------------------------------------------
 
 
