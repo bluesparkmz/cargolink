@@ -615,34 +615,6 @@ class ProposalLoadSummary(BaseModel):
     origin: str
     destination: str
     value: float | None = None
-    negotiable: bool
-    status: str
-    departure_date: date | None = None
-
-
-class ProposalCompanySummary(BaseModel):
-    """Resumo da empresa que enviou a proposta."""
-
-    id: int
-    company_name: str
-    average_rating: float
-    total_trips: int
-    verified: bool
-
-
-class ProposalDriverSummary(BaseModel):
-    """Resumo do motorista indicado na proposta."""
-
-    id: int
-    name: str
-    average_rating: float
-    total_trips: int
-    available: bool
-
-
-class ProposalVehicleSummary(BaseModel):
-    """Resumo do camiao indicado na proposta."""
-
     id: int
     plate: str
     brand: str | None = None

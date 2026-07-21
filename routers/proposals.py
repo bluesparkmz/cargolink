@@ -69,6 +69,7 @@ def _proposal_to_detail(proposal: LoadProposal) -> LoadProposalDetailResponse:
             average_rating=float(company.average_rating),
             total_trips=company.total_trips,
             verified=company.verified,
+            logo_url=company.user.profile_photo if company.user else None,
         )
         if company
         else None,
@@ -78,6 +79,7 @@ def _proposal_to_detail(proposal: LoadProposal) -> LoadProposalDetailResponse:
             average_rating=float(driver.average_rating),
             total_trips=driver.total_trips,
             available=driver.available,
+            avatar_url=driver.user.profile_photo if driver.user else None,
         )
         if driver and driver.user
         else None,
