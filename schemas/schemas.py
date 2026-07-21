@@ -596,29 +596,6 @@ class LoadProposalResponse(BaseModel):
     load_id: int
     company_id: int | None = None
     driver_id: int | None = None
-    vehicle_id: int | None = None
-    proposed_value: float | None = None
-    message: str | None = None
-    status: str
-    created_at: datetime
-
-    model_config = {"from_attributes": True}
-
-
-class ProposalLoadSummary(BaseModel):
-    """Resumo da carga ligada a proposta."""
-
-    id: int
-    code: str
-    load_type: str
-    load_name: str | None = None
-    origin: str
-    destination: str
-    value: float | None = None
-    id: int
-    plate: str
-    brand: str | None = None
-    model_name: str | None = None
     vehicle_type: str | None = None
     tonnage_capacity: float | None = None
     status: str
