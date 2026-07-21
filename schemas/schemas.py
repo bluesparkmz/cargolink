@@ -694,6 +694,81 @@ class ProposalNegotiationDetailResponse(BaseModel):
 # ---------------------------------------------------------------------------
 
 
+class TripVehicleSummary(BaseModel):
+    """Resumo do camiao usado na viagem."""
+
+    id: int
+    company_id: int | None = None
+    driver_id: int | None = None
+    plate: str
+    brand: str | None = None
+    model_name: str | None = None
+    vehicle_type: str | None = None
+    tonnage_capacity: float | None = None
+    volume_capacity: float | None = None
+    photo: str | None = None
+    status: str
+    current_lat: float | None = None
+    current_lng: float | None = None
+    location_updated_at: datetime | None = None
+    created_at: datetime
+
+    model_config = {"from_attributes": True}
+
+
+class TripLoadSummary(BaseModel):
+    """Resumo da carga da viagem."""
+
+    id: int
+    client_id: int
+    code: str
+    load_type: str
+    load_name: str | None = None
+    description: str | None = None
+    weight: float | None = None
+    weight_unit: str | None = None
+    volume: float | None = None
+    value: float | None = None
+    negotiable: bool
+    origin: str
+    destination: str
+    origin_lat: float | None = None
+    origin_lng: float | None = None
+    destination_lat: float | None = None
+    destination_lng: float | None = None
+    departure_date: date | None = None
+    load_fill: str | None = None
+    suggested_vehicle_type: str | None = None
+    instructions: str | None = None
+    status: str
+    created_at: datetime
+    updated_at: datetime
+
+    model_config = {"from_attributes": True}
+
+
+class TripDriverSummary(BaseModel):
+    """Resumo do motorista da viagem."""
+
+    id: int
+    user_id: int
+    company_id: int | None = None
+    license_number: str
+    years_experience: int
+    average_rating: float
+    total_trips: int
+    available: bool
+    current_lat: float | None = None
+    current_lng: float | None = None
+    location_updated_at: datetime | None = None
+    # campos do utilizador ligados ao motorista
+    name: str | None = None
+    phone: str | None = None
+    profile_photo: str | None = None
+
+    model_config = {"from_attributes": True}
+
+
 class TripResponse(BaseModel):
     """Viagem após aceite de proposta."""
 
@@ -711,6 +786,9 @@ class TripResponse(BaseModel):
     traveled_distance_km: float | None = None
     estimated_time: str | None = None
     created_at: datetime
+    load: TripLoadSummary | None = None
+    vehicle: TripVehicleSummary | None = None
+    driver: TripDriverSummary | None = None
 
     model_config = {"from_attributes": True}
 

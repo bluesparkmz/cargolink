@@ -24,9 +24,114 @@ from models.models import Client, Company, Driver, Load, Trip, TripLocation, Use
 from schemas.schemas import TripLocationCreateRequest, TripStartRequest
 
 
+def _serialize_trip(trip: Trip) -> dict:
+    """Converte um objeto Trip ORM num dicionario com dados completos de carga, camiao e motorista."""
+    load = trip.load
+    vehicle = trip.vehicle
+    driver = trip.driver
+
+    load_data = None
+    if load is not None:
+        load_data = {
+            "id": load.id,
+            "client_id": load.client_id,
+            "code": load.code,
+            "load_type": load.load_type,
+            "load_name": load.load_name,
+            "description": load.description,
+            "weight": float(load.weight) if load.weight is not None else None,
+            "weight_unit": load.weight_unit,
+            "volume": float(load.volume) if load.volume is not None else None,
+            "value": float(load.value) if load.value is not None else None,
+            "negotiable": load.negotiable,
+            "origin": load.origin,
+            "destination": load.destination,
+            "origin_lat": float(load.origin_lat) if load.origin_lat is not None else None,
+            "origin_lng": float(load.origin_lng) if load.origin_lng is not None else None,
+            "destination_lat": float(load.destination_lat) if load.destination_lat is not None else None,
+            "destination_lng": float(load.destination_lng) if load.destination_lng is not None else None,
+            "departure_date": load.departure_date,
+            "load_fill": load.load_fill,
+            "suggested_vehicle_type": load.suggested_vehicle_type,
+            "instructions": load.instructions,
+            "status": load.status,
+            "created_at": load.created_at,
+            "updated_at": load.updated_at,
+        }
+
+    vehicle_data = None
+    if vehicle is not None:
+        vehicle_data = {
+            "id": vehicle.id,
+            "company_id": vehicle.company_id,
+            "driver_id": vehicle.driver_id,
+            "plate": vehicle.plate,
+            "brand": vehicle.brand,
+            "model_name": vehicle.model_name,
+            "vehicle_type": vehicle.vehicle_type,
+            "tonnage_capacity": float(vehicle.tonnage_capacity) if vehicle.tonnage_capacity is not None else None,
+            "volume_capacity": float(vehicle.volume_capacity) if vehicle.volume_capacity is not None else None,
+            "photo": vehicle.photo,
+            "status": vehicle.status,
+            "current_lat": float(vehicle.current_lat) if vehicle.current_lat is not None else None,
+            "current_lng": float(vehicle.current_lng) if vehicle.current_lng is not None else None,
+            "location_updated_at": vehicle.location_updated_at,
+            "created_at": vehicle.created_at,
+        }
+
+    driver_data = None
+    if driver is not None:
+        driver_user = driver.user if hasattr(driver, "user") else None
+        driver_data = {
+            "id": driver.id,
+            "user_id": driver.user_id,
+            "company_id": driver.company_id,
+            "license_number": driver.license_number,
+            "years_experience": driver.years_experience,
+            "average_rating": float(driver.average_rating) if driver.average_rating is not None else 0.0,
+            "total_trips": driver.total_trips,
+            "available": driver.available,
+            "current_lat": float(driver.current_lat) if driver.current_lat is not None else None,
+            "current_lng": float(driver.current_lng) if driver.current_lng is not None else None,
+            "location_updated_at": driver.location_updated_at,
+            "name": driver_user.name if driver_user else None,
+            "phone": driver_user.phone if driver_user else None,
+            "profile_photo": driver_user.profile_photo if driver_user else None,
+        }
+
+    return {
+        "id": trip.id,
+        "load_id": trip.load_id,
+        "company_id": trip.company_id,
+        "driver_id": trip.driver_id,
+        "vehicle_id": trip.vehicle_id,
+        "status": trip.status,
+        "started_at": trip.started_at,
+        "arrived_at": trip.arrived_at,
+        "client_confirmed_at": trip.client_confirmed_at,
+        "completed_at": trip.completed_at,
+        "total_distance_km": float(trip.total_distance_km) if trip.total_distance_km is not None else None,
+        "traveled_distance_km": float(trip.traveled_distance_km) if trip.traveled_distance_km is not None else None,
+        "estimated_time": trip.estimated_time,
+        "created_at": trip.created_at,
+        "load": load_data,
+        "vehicle": vehicle_data,
+        "driver": driver_data,
+    }
+
+
 def get_trip_detail(db: Session, trip_id: int) -> Trip:
     """Busca viagem por id."""
-    trip = db.query(Trip).filter(Trip.id == trip_id).first()
+    trip = (
+        db.query(Trip)
+        .options(
+            joinedload(Trip.load),
+            joinedload(Trip.vehicle),
+            joinedload(Trip.driver).joinedload(Driver.user),
+        )
+        .filter(Trip.id == trip_id)
+        .first()
+    )
     if trip is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Viagem não encontrada")
     return trip
@@ -172,6 +277,18 @@ def _trip_status_event_payload(db: Session, trip: Trip) -> dict:
         "started_at": trip.started_at,
         "arrived_at": trip.arrived_at,
         "completed_at": trip.completed_at,
+        "load": {
+            "id": load.id,
+            "code": load.code,
+            "load_type": load.load_type,
+            "load_name": load.load_name,
+            "origin": load.origin,
+            "destination": load.destination,
+            "departure_date": load.departure_date,
+            "status": load.status,
+        }
+        if load
+        else None,
         "driver": {
             "id": driver.id,
             "name": driver.user.name if driver and driver.user else None,
@@ -187,6 +304,8 @@ def _trip_status_event_payload(db: Session, trip: Trip) -> dict:
             "brand": vehicle.brand,
             "model_name": vehicle.model_name,
             "vehicle_type": vehicle.vehicle_type,
+            "photo": vehicle.photo,
+            "status": vehicle.status,
             "current_lat": vehicle.current_lat,
             "current_lng": vehicle.current_lng,
         }
@@ -221,43 +340,50 @@ def _emit_trip_status_changed(
     emit_to_rooms(_trip_event_rooms(trip), _trip_status_event_payload(db, trip))
 
 
-def list_my_trips(db: Session, user: User) -> list[Trip]:
-    """Lista viagens do motorista ou do cliente."""
+def list_my_trips(db: Session, user: User) -> list[dict]:
+    """Lista viagens do motorista ou do cliente com dados da carga, do camiao e do motorista."""
+    options = [
+        joinedload(Trip.load),
+        joinedload(Trip.vehicle),
+        joinedload(Trip.driver).joinedload(Driver.user),
+    ]
+
+    trips: list[Trip] = []
     if user.user_type == "motorista":
         driver = db.query(Driver).filter(Driver.user_id == user.id).first()
-        if driver is None:
-            return []
-        return (
-            db.query(Trip)
-            .filter(Trip.driver_id == driver.id)
-            .order_by(Trip.created_at.desc())
-            .all()
-        )
+        if driver is not None:
+            trips = (
+                db.query(Trip)
+                .options(*options)
+                .filter(Trip.driver_id == driver.id)
+                .order_by(Trip.created_at.desc())
+                .all()
+            )
 
-    if user.user_type == "cliente":
+    elif user.user_type == "cliente":
         client = db.query(Client).filter(Client.user_id == user.id).first()
-        if client is None:
-            return []
-        return (
-            db.query(Trip)
-            .join(Load, Trip.load_id == Load.id)
-            .filter(Load.client_id == client.id)
-            .order_by(Trip.created_at.desc())
-            .all()
-        )
+        if client is not None:
+            trips = (
+                db.query(Trip)
+                .options(*options)
+                .join(Load, Trip.load_id == Load.id)
+                .filter(Load.client_id == client.id)
+                .order_by(Trip.created_at.desc())
+                .all()
+            )
 
-    if user.user_type == "empresa":
+    elif user.user_type == "empresa":
         company = db.query(Company).filter(Company.user_id == user.id).first()
-        if company is None:
-            return []
-        return (
-            db.query(Trip)
-            .filter(Trip.company_id == company.id)
-            .order_by(Trip.created_at.desc())
-            .all()
-        )
+        if company is not None:
+            trips = (
+                db.query(Trip)
+                .options(*options)
+                .filter(Trip.company_id == company.id)
+                .order_by(Trip.created_at.desc())
+                .all()
+            )
 
-    return []
+    return [_serialize_trip(t) for t in trips]
 
 
 def start_trip(db: Session, user: User, trip_id: int, data: TripStartRequest) -> Trip:
@@ -313,7 +439,7 @@ def start_trip(db: Session, user: User, trip_id: int, data: TripStartRequest) ->
         body="O motorista iniciou a viagem.",
         notification_type="trip.started",
     )
-    return trip
+    return get_trip_detail(db, trip.id)
 
 
 def arrive_trip(db: Session, user: User, trip_id: int) -> Trip:
@@ -346,7 +472,7 @@ def arrive_trip(db: Session, user: User, trip_id: int) -> Trip:
         body="A carga chegou ao destino. Aguarda confirmacao do cliente.",
         notification_type="trip.arrived",
     )
-    return trip
+    return get_trip_detail(db, trip.id)
 
 
 def confirm_delivery(db: Session, user: User, trip_id: int) -> Trip:
@@ -393,7 +519,7 @@ def confirm_delivery(db: Session, user: User, trip_id: int) -> Trip:
         body="A entrega foi confirmada pelo cliente.",
         notification_type="trip.completed",
     )
-    return trip
+    return get_trip_detail(db, trip.id)
 
 
 def add_trip_location(

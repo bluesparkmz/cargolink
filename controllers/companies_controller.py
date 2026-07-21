@@ -175,6 +175,7 @@ def list_company_trips(db: Session, user: User) -> list[Trip]:
     company = get_my_company(db, user)
     return (
         db.query(Trip)
+        .options(joinedload(Trip.load), joinedload(Trip.vehicle))
         .filter(Trip.company_id == company.id)
         .order_by(Trip.created_at.desc())
         .all()

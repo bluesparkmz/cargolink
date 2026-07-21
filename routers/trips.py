@@ -44,9 +44,10 @@ def get_trip(
     db: Session = Depends(get_db),
 ):
     """Detalhe da viagem."""
+    from controllers.trips_controller import _serialize_trip
     trip = get_trip_detail(db, trip_id)
     _user_can_access_trip(db, current_user, trip)
-    return trip
+    return _serialize_trip(trip)
 
 
 @router.patch("/{trip_id}/start", response_model=TripResponse)

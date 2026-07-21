@@ -83,24 +83,7 @@ def _proposal_to_response(proposal: LoadProposal) -> LoadProposalResponse:
 
 
 def _trip_to_response(trip) -> TripResponse:
-    return TripResponse(
-        id=trip.id,
-        load_id=trip.load_id,
-        company_id=trip.company_id,
-        driver_id=trip.driver_id,
-        vehicle_id=trip.vehicle_id,
-        status=trip.status,
-        started_at=trip.started_at,
-        arrived_at=trip.arrived_at,
-        client_confirmed_at=trip.client_confirmed_at,
-        completed_at=trip.completed_at,
-        total_distance_km=float(trip.total_distance_km) if trip.total_distance_km else None,
-        traveled_distance_km=float(trip.traveled_distance_km)
-        if trip.traveled_distance_km
-        else None,
-        estimated_time=trip.estimated_time,
-        created_at=trip.created_at,
-    )
+    return TripResponse.model_validate(trip)
 
 
 @router.get("/me", response_model=CompanyDetailResponse)
