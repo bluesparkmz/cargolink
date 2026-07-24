@@ -59,7 +59,7 @@ settings.GOOGLE_CLIENT_IDS = [
     client_id.strip()
     for client_id in os.getenv(
         "GOOGLE_CLIENT_IDS",
-        "750540528154-m9c1ee1gd8mfia95egfv2atlpbqhhki4.apps.googleusercontent.com",
+        "750540528154-nl33mipe4r1g6lnbam1k3kp59ukm9gg2.apps.googleusercontent.com",
     ).split(",")
     if client_id.strip()
 ]
