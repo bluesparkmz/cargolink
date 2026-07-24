@@ -325,19 +325,8 @@ def _user_has_load_relation(db: Session, user: User, load: Load) -> bool:
 
 
 def _ensure_can_view_load(db: Session, user: User, load: Load) -> None:
-    """Bloqueia acesso a cargas sem relação; marketplace só para empresas."""
-    if user.user_type == "admin":
-        return
-
-    if load.status == LOAD_STATUS_AVAILABLE:
-        if user.user_type == "empresa":
-            return
-        if _user_has_load_relation(db, user, load):
-            return
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Sem acesso a esta carga")
-
-    if not _user_has_load_relation(db, user, load):
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Sem acesso a esta carga")
+    """Permite visualização dos detalhes de qualquer carga pública para utilizadores autenticados."""
+    return
 
 
 def _related_load_ids_subquery(db: Session, user: User):
@@ -601,18 +590,11 @@ def list_available_loads(
     departure_date_from: date | None = None,
     departure_date_to: date | None = None,
 ) -> list[Load]:
-    """Lista cargas disponíveis para qualquer utilizador autenticado.
-    
-    Cargas em trânsito/aceites são restritas a quem tem relação com elas.
-    """
-    if status_filter in (LOAD_STATUS_IN_TRANSIT, LOAD_STATUS_ACCEPTED, *LOAD_ACTIVE_STATUSES):
-        return list_related_loads(db, user, status_filter=status_filter)
+    """Lista cargas públicas (disponíveis, em trânsito, etc.) para qualquer utilizador autenticado."""
+    query = db.query(Load)
 
-    if status_filter and status_filter not in (LOAD_STATUS_AVAILABLE, None):
-        return list_related_loads(db, user, status_filter=status_filter)
-
-    # Endpoint público: qualquer utilizador autenticado vê todas as cargas disponíveis
-    query = db.query(Load).filter(Load.status == LOAD_STATUS_AVAILABLE)
+    if status_filter:
+        query = query.filter(Load.status == status_filter)
 
     if load_type:
         query = query.filter(Load.load_type == load_type)
