@@ -582,13 +582,14 @@ def list_available_loads(
     db: Session,
     user: User,
     *,
-    status_filter: str | None = "disponivel",
+    status_filter: str | None = None,
     load_type: str | None = None,
     origin: str | None = None,
     destination: str | None = None,
     q: str | None = None,
     departure_date_from: date | None = None,
     departure_date_to: date | None = None,
+    limit: int | None = None,
 ) -> list[Load]:
     """Lista cargas públicas (disponíveis, em trânsito, etc.) para qualquer utilizador autenticado."""
     query = db.query(Load)
@@ -614,7 +615,15 @@ def list_available_loads(
         query = query.filter(Load.departure_date >= departure_date_from)
     if departure_date_to:
         query = query.filter(Load.departure_date <= departure_date_to)
-    return query.order_by(Load.created_at.desc()).all()
+
+    query = query.order_by(Load.created_at.desc())
+
+    # Se limit for passado ou se a consulta for sem filtro de status, limita a 20 por padrão
+    effective_limit = limit if limit is not None else (20 if status_filter is None else None)
+    if effective_limit:
+        query = query.limit(effective_limit)
+
+    return query.all()
 
 
 def get_load_tracking(db: Session, user: User, load_id: int) -> dict:

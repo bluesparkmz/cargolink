@@ -38,6 +38,7 @@ def _to_list_item(vehicle: Vehicle) -> VehicleListItem:
     return VehicleListItem(
         id=vehicle.id,
         company_id=vehicle.company_id,
+        company_name=vehicle.company.company_name if vehicle.company else None,
         driver_id=vehicle.driver_id,
         plate=vehicle.plate,
         brand=vehicle.brand,

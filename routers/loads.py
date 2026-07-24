@@ -136,13 +136,14 @@ def publish_load(
 
 @router.get("", response_model=list[LoadListItem])
 def list_loads(
-    status: str | None = Query("disponivel", description="Filtrar por status"),
+    status: str | None = Query(None, description="Filtrar por status"),
     load_type: str | None = Query(None, description="Tipo de carga"),
     origin: str | None = Query(None, description="Filtrar origem"),
     destination: str | None = Query(None, description="Filtrar destino"),
     q: str | None = Query(None, description="Pesquisa em origem, destino, nome ou código"),
     departure_date_from: date | None = Query(None),
     departure_date_to: date | None = Query(None),
+    limit: int | None = Query(None, description="Limite de resultados"),
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
@@ -157,6 +158,7 @@ def list_loads(
         q=q,
         departure_date_from=departure_date_from,
         departure_date_to=departure_date_to,
+        limit=limit,
     )
 
 

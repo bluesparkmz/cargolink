@@ -952,6 +952,7 @@ class VehicleListItem(BaseModel):
 
     id: int
     company_id: int | None = None
+    company_name: str | None = None
     driver_id: int | None = None
     plate: str
     brand: str | None = None
