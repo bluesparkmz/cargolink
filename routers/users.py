@@ -41,3 +41,20 @@ def get_user(
 ):
     """Consulta utilizador por id (requer autenticação)."""
     return get_user_by_id(db, user_id)
+
+
+from pydantic import BaseModel
+
+class PushTokenRequest(BaseModel):
+    push_token: str
+
+@router.patch("/me/push-token")
+def update_push_token(
+    data: PushTokenRequest,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Atualiza o push token para notificações push nativas."""
+    current_user.push_token = data.push_token
+    db.commit()
+    return {"status": "ok", "message": "Push token updated successfully"}

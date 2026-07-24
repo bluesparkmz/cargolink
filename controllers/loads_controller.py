@@ -601,27 +601,19 @@ def list_available_loads(
     departure_date_from: date | None = None,
     departure_date_to: date | None = None,
 ) -> list[Load]:
-    """Lista cargas com filtros; em andamento só para quem tem relação com a carga."""
+    """Lista cargas disponíveis para qualquer utilizador autenticado.
+    
+    Cargas em trânsito/aceites são restritas a quem tem relação com elas.
+    """
     if status_filter in (LOAD_STATUS_IN_TRANSIT, LOAD_STATUS_ACCEPTED, *LOAD_ACTIVE_STATUSES):
         return list_related_loads(db, user, status_filter=status_filter)
 
     if status_filter and status_filter not in (LOAD_STATUS_AVAILABLE, None):
         return list_related_loads(db, user, status_filter=status_filter)
 
-    if user.user_type == "empresa":
-        query = db.query(Load).filter(Load.status == LOAD_STATUS_AVAILABLE)
-    elif user.user_type == "cliente":
-        client = db.query(Client).filter(Client.user_id == user.id).first()
-        if not client:
-            return []
-        query = db.query(Load).filter(Load.client_id == client.id)
-        if status_filter:
-            query = query.filter(Load.status == status_filter)
-    else:
-        return []
+    # Endpoint público: qualquer utilizador autenticado vê todas as cargas disponíveis
+    query = db.query(Load).filter(Load.status == LOAD_STATUS_AVAILABLE)
 
-    if status_filter and user.user_type == "empresa":
-        query = query.filter(Load.status == status_filter)
     if load_type:
         query = query.filter(Load.load_type == load_type)
     if origin:
