@@ -297,6 +297,9 @@ class Trip(Base):
     driver_id: Mapped[int | None] = mapped_column(ForeignKey("drivers.id"))
     vehicle_id: Mapped[int | None] = mapped_column(ForeignKey("vehicles.id"))
     status: Mapped[str] = mapped_column(String(40), default="aguardando_inicio")
+    en_route_pickup_at: Mapped[datetime | None] = mapped_column(DateTime)
+    arrived_pickup_at: Mapped[datetime | None] = mapped_column(DateTime)
+    loaded_at: Mapped[datetime | None] = mapped_column(DateTime)
     started_at: Mapped[datetime | None] = mapped_column(DateTime)
     arrived_at: Mapped[datetime | None] = mapped_column(DateTime)
     client_confirmed_at: Mapped[datetime | None] = mapped_column(DateTime)
@@ -314,6 +317,9 @@ class Trip(Base):
     vehicle: Mapped[Vehicle | None] = relationship(back_populates="trips")
     locations: Mapped[list[TripLocation]] = relationship(back_populates="trip")
     stops: Mapped[list["TripStop"]] = relationship(back_populates="trip")
+    activities: Mapped[list["TripActivity"]] = relationship(
+        back_populates="trip", order_by="TripActivity.created_at.desc()"
+    )
     ratings: Mapped[list[Rating]] = relationship(back_populates="trip")
     fuel_requests: Mapped[list[FuelRequest]] = relationship(back_populates="trip")
 
@@ -348,6 +354,23 @@ class TripStop(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
 
     trip: Mapped[Trip] = relationship(back_populates="stops")
+
+
+class TripActivity(Base):
+    """Tabela trip_activities — histórico cronológico de atividades/eventos da viagem."""
+
+    __tablename__ = "trip_activities"
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    trip_id: Mapped[int] = mapped_column(ForeignKey("trips.id", ondelete="CASCADE"), nullable=False)
+    event_type: Mapped[str] = mapped_column("tipo_evento", String(50), nullable=False)
+    title: Mapped[str] = mapped_column("titulo", String(150), nullable=False)
+    description: Mapped[str | None] = mapped_column("descricao", Text)
+    latitude: Mapped[Decimal | None] = mapped_column(Numeric(10, 7))
+    longitude: Mapped[Decimal | None] = mapped_column(Numeric(10, 7))
+    created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
+
+    trip: Mapped[Trip] = relationship(back_populates="activities")
 
 
 class GPSLog(Base):

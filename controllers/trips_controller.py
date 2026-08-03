@@ -13,15 +13,42 @@ from constants import (
     TRIP_LOCATION_HEARTBEAT_SECONDS,
     TRIP_LOCATION_MIN_DISTANCE_METERS,
     TRIP_LOCATION_MIN_INTERVAL_SECONDS,
+    TRIP_STATUS_ARRIVED_PICKUP,
     TRIP_STATUS_COMPLETED,
+    TRIP_STATUS_EN_ROUTE_PICKUP,
+    TRIP_STATUS_LOADED,
     TRIP_STATUS_STARTED,
     TRIP_STATUS_WAITING,
     TRIP_STATUS_WAITING_CLIENT,
 )
 from controllers.notifications_controller import create_notification, emit_notification
 from controllers.realtime_events import emit_to_rooms
-from models.models import Client, Company, Driver, Load, Trip, TripLocation, User, Vehicle
+from models.models import Client, Company, Driver, Load, Trip, TripActivity, TripLocation, User, Vehicle
 from schemas.schemas import TripLocationCreateRequest, TripStartRequest
+
+
+def log_trip_activity(
+    db: Session,
+    trip: Trip,
+    event_type: str,
+    title: str,
+    description: str | None = None,
+    latitude: Decimal | None = None,
+    longitude: Decimal | None = None,
+) -> TripActivity:
+    """Regista uma nova atividade cronologica no historico da viagem."""
+    activity = TripActivity(
+        trip_id=trip.id,
+        event_type=event_type,
+        title=title,
+        description=description,
+        latitude=latitude,
+        longitude=longitude,
+    )
+    db.add(activity)
+    db.commit()
+    db.refresh(activity)
+    return activity
 
 
 def _serialize_trip(trip: Trip) -> dict:
@@ -99,6 +126,20 @@ def _serialize_trip(trip: Trip) -> dict:
             "profile_photo": driver_user.profile_photo if driver_user else None,
         }
 
+    activities_data = [
+        {
+            "id": act.id,
+            "trip_id": act.trip_id,
+            "event_type": act.event_type,
+            "title": act.title,
+            "description": act.description,
+            "latitude": float(act.latitude) if act.latitude is not None else None,
+            "longitude": float(act.longitude) if act.longitude is not None else None,
+            "created_at": act.created_at,
+        }
+        for act in (trip.activities or [])
+    ]
+
     return {
         "id": trip.id,
         "load_id": trip.load_id,
@@ -112,6 +153,9 @@ def _serialize_trip(trip: Trip) -> dict:
         "origin_lng": float(load.origin_lng) if load and load.origin_lng is not None else None,
         "destination_lat": float(load.destination_lat) if load and load.destination_lat is not None else None,
         "destination_lng": float(load.destination_lng) if load and load.destination_lng is not None else None,
+        "en_route_pickup_at": trip.en_route_pickup_at,
+        "arrived_pickup_at": trip.arrived_pickup_at,
+        "loaded_at": trip.loaded_at,
         "started_at": trip.started_at,
         "arrived_at": trip.arrived_at,
         "client_confirmed_at": trip.client_confirmed_at,
@@ -123,6 +167,7 @@ def _serialize_trip(trip: Trip) -> dict:
         "load": load_data,
         "vehicle": vehicle_data,
         "driver": driver_data,
+        "activities": activities_data,
     }
 
 
@@ -134,6 +179,7 @@ def get_trip_detail(db: Session, trip_id: int) -> Trip:
             joinedload(Trip.load),
             joinedload(Trip.vehicle),
             joinedload(Trip.driver).joinedload(Driver.user),
+            joinedload(Trip.activities),
         )
         .filter(Trip.id == trip_id)
         .first()
@@ -392,8 +438,140 @@ def list_my_trips(db: Session, user: User) -> list[dict]:
     return [_serialize_trip(t) for t in trips]
 
 
+def start_pickup_trip(db: Session, user: User, trip_id: int) -> Trip:
+    """Motorista inicia deslocamento para o local de carregamento (origem)."""
+    if user.user_type != "motorista":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Apenas motoristas podem iniciar deslocamento para coleta",
+        )
+
+    trip = get_trip_detail(db, trip_id)
+    driver = db.query(Driver).filter(Driver.user_id == user.id).first()
+    if driver is None or trip.driver_id != driver.id:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Viagem de outro motorista")
+
+    if trip.status != TRIP_STATUS_WAITING:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Viagem precisa estar aguardando início para sair para coleta",
+        )
+
+    trip.status = TRIP_STATUS_EN_ROUTE_PICKUP
+    trip.en_route_pickup_at = datetime.now(timezone.utc)
+    db.commit()
+    db.refresh(trip)
+
+    log_trip_activity(
+        db,
+        trip,
+        event_type=TRIP_STATUS_EN_ROUTE_PICKUP,
+        title="Indo Carregar",
+        description="Motorista a caminho do local de coleta/origem da carga.",
+        latitude=driver.current_lat,
+        longitude=driver.current_lng,
+    )
+
+    _emit_trip_status_changed(
+        db,
+        trip,
+        title="Motorista a caminho da coleta",
+        body="O motorista iniciou o deslocamento para o local de carregamento.",
+        notification_type="trip.en_route_pickup",
+    )
+    return get_trip_detail(db, trip.id)
+
+
+def arrive_pickup_trip(db: Session, user: User, trip_id: int) -> Trip:
+    """Motorista confirma chegada ao local de carregamento (origem)."""
+    if user.user_type != "motorista":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Apenas motoristas podem confirmar chegada ao carregamento",
+        )
+
+    trip = get_trip_detail(db, trip_id)
+    driver = db.query(Driver).filter(Driver.user_id == user.id).first()
+    if driver is None or trip.driver_id != driver.id:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Viagem de outro motorista")
+
+    if trip.status != TRIP_STATUS_EN_ROUTE_PICKUP:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Motorista precisa estar a caminho da coleta para confirmar chegada",
+        )
+
+    trip.status = TRIP_STATUS_ARRIVED_PICKUP
+    trip.arrived_pickup_at = datetime.now(timezone.utc)
+    db.commit()
+    db.refresh(trip)
+
+    log_trip_activity(
+        db,
+        trip,
+        event_type=TRIP_STATUS_ARRIVED_PICKUP,
+        title="Chegou à Origem",
+        description="Motorista chegou ao local de carregamento.",
+        latitude=driver.current_lat,
+        longitude=driver.current_lng,
+    )
+
+    _emit_trip_status_changed(
+        db,
+        trip,
+        title="Motorista chegou ao carregamento",
+        body="O motorista chegou ao local de coleta da carga.",
+        notification_type="trip.arrived_pickup",
+    )
+    return get_trip_detail(db, trip.id)
+
+
+def confirm_loaded_trip(db: Session, user: User, trip_id: int) -> Trip:
+    """Motorista confirma que a carga foi totalmente carregada no camião."""
+    if user.user_type != "motorista":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Apenas motoristas podem confirmar carregamento",
+        )
+
+    trip = get_trip_detail(db, trip_id)
+    driver = db.query(Driver).filter(Driver.user_id == user.id).first()
+    if driver is None or trip.driver_id != driver.id:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Viagem de outro motorista")
+
+    if trip.status != TRIP_STATUS_ARRIVED_PICKUP:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Carga só pode ser confirmada como carregada após a chegada ao local de coleta",
+        )
+
+    trip.status = TRIP_STATUS_LOADED
+    trip.loaded_at = datetime.now(timezone.utc)
+    db.commit()
+    db.refresh(trip)
+
+    log_trip_activity(
+        db,
+        trip,
+        event_type=TRIP_STATUS_LOADED,
+        title="Carga Carregada",
+        description="Carga carregada no veículo com sucesso e pronta para viagem de entrega.",
+        latitude=driver.current_lat,
+        longitude=driver.current_lng,
+    )
+
+    _emit_trip_status_changed(
+        db,
+        trip,
+        title="Carga Carregada",
+        body="A carga foi carregada no camião e está pronta para a viagem de entrega.",
+        notification_type="trip.loaded",
+    )
+    return get_trip_detail(db, trip.id)
+
+
 def start_trip(db: Session, user: User, trip_id: int, data: TripStartRequest) -> Trip:
-    """Motorista inicia a viagem."""
+    """Motorista inicia a viagem de entrega."""
     if user.user_type != "motorista":
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
@@ -405,7 +583,7 @@ def start_trip(db: Session, user: User, trip_id: int, data: TripStartRequest) ->
     if driver is None or trip.driver_id != driver.id:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Viagem de outro motorista")
 
-    if trip.status != TRIP_STATUS_WAITING:
+    if trip.status not in (TRIP_STATUS_LOADED, TRIP_STATUS_WAITING):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Viagem não pode ser iniciada neste estado",
@@ -438,11 +616,22 @@ def start_trip(db: Session, user: User, trip_id: int, data: TripStartRequest) ->
 
     db.commit()
     db.refresh(trip)
+
+    log_trip_activity(
+        db,
+        trip,
+        event_type=TRIP_STATUS_STARTED,
+        title="Viagem de Entrega Iniciada",
+        description="Motorista iniciou o transporte da carga em direção ao destino.",
+        latitude=driver.current_lat,
+        longitude=driver.current_lng,
+    )
+
     _emit_trip_status_changed(
         db,
         trip,
-        title="Viagem iniciada",
-        body="O motorista iniciou a viagem.",
+        title="Viagem de entrega iniciada",
+        body="O motorista iniciou a viagem de entrega da carga.",
         notification_type="trip.started",
     )
     return get_trip_detail(db, trip.id)
@@ -471,11 +660,22 @@ def arrive_trip(db: Session, user: User, trip_id: int) -> Trip:
     trip.arrived_at = datetime.now(timezone.utc)
     db.commit()
     db.refresh(trip)
+
+    log_trip_activity(
+        db,
+        trip,
+        event_type=TRIP_STATUS_WAITING_CLIENT,
+        title="Chegou ao Destino",
+        description="Motorista chegou ao local de entrega e aguarda confirmação do cliente.",
+        latitude=driver.current_lat,
+        longitude=driver.current_lng,
+    )
+
     _emit_trip_status_changed(
         db,
         trip,
         title="Motorista chegou ao destino",
-        body="A carga chegou ao destino. Aguarda confirmacao do cliente.",
+        body="A carga chegou ao destino. Aguarda confirmação do cliente.",
         notification_type="trip.arrived",
     )
     return get_trip_detail(db, trip.id)
@@ -518,6 +718,15 @@ def confirm_delivery(db: Session, user: User, trip_id: int) -> Trip:
 
     db.commit()
     db.refresh(trip)
+
+    log_trip_activity(
+        db,
+        trip,
+        event_type=TRIP_STATUS_COMPLETED,
+        title="Entrega Concluída",
+        description="A entrega foi confirmada pelo cliente.",
+    )
+
     _emit_trip_status_changed(
         db,
         trip,

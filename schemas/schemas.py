@@ -771,6 +771,21 @@ class TripDriverSummary(BaseModel):
     model_config = {"from_attributes": True}
 
 
+class TripActivityResponse(BaseModel):
+    """Atividade/evento registado na viagem."""
+
+    id: int
+    trip_id: int
+    event_type: str
+    title: str
+    description: str | None = None
+    latitude: float | None = None
+    longitude: float | None = None
+    created_at: datetime
+
+    model_config = {"from_attributes": True}
+
+
 class TripResponse(BaseModel):
     """Viagem após aceite de proposta."""
 
@@ -786,6 +801,9 @@ class TripResponse(BaseModel):
     origin_lng: float | None = None
     destination_lat: float | None = None
     destination_lng: float | None = None
+    en_route_pickup_at: datetime | None = None
+    arrived_pickup_at: datetime | None = None
+    loaded_at: datetime | None = None
     started_at: datetime | None = None
     arrived_at: datetime | None = None
     client_confirmed_at: datetime | None = None
@@ -797,6 +815,7 @@ class TripResponse(BaseModel):
     load: TripLoadSummary | None = None
     vehicle: TripVehicleSummary | None = None
     driver: TripDriverSummary | None = None
+    activities: list[TripActivityResponse] = []
 
     model_config = {"from_attributes": True}
 

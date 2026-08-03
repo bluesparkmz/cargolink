@@ -44,6 +44,9 @@ WEIGHT_UNITS = ["ton", "kg"]
 
 # Estados da viagem
 TRIP_STATUS_WAITING = "aguardando_inicio"
+TRIP_STATUS_EN_ROUTE_PICKUP = "indo_carregar"
+TRIP_STATUS_ARRIVED_PICKUP = "chegou_origem"
+TRIP_STATUS_LOADED = "carregado"
 TRIP_STATUS_STARTED = "viagem_iniciada"
 TRIP_STATUS_WAITING_CLIENT = "aguardando_cliente"
 TRIP_STATUS_COMPLETED = "concluida"
@@ -60,6 +63,9 @@ TRIP_GROUP_COMPLETED = "concluidas"
 TRIP_GROUP_STATUSES = {
     TRIP_GROUP_IN_PROGRESS: [
         TRIP_STATUS_WAITING,
+        TRIP_STATUS_EN_ROUTE_PICKUP,
+        TRIP_STATUS_ARRIVED_PICKUP,
+        TRIP_STATUS_LOADED,
         TRIP_STATUS_STARTED,
         TRIP_STATUS_WAITING_CLIENT,
     ],

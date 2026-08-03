@@ -8,11 +8,14 @@ from sqlalchemy.orm import Session
 from controllers.trips_controller import (
     _user_can_access_trip,
     add_trip_location,
+    arrive_pickup_trip,
     arrive_trip,
     confirm_delivery,
+    confirm_loaded_trip,
     get_trip_detail,
     list_my_trips,
     list_trip_locations,
+    start_pickup_trip,
     start_trip,
 )
 from deps import get_current_user
@@ -50,6 +53,36 @@ def get_trip(
     return _serialize_trip(trip)
 
 
+@router.patch("/{trip_id}/start-pickup", response_model=TripResponse)
+def start_pickup(
+    trip_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Motorista inicia deslocamento para o local de carregamento (origem)."""
+    return start_pickup_trip(db, current_user, trip_id)
+
+
+@router.patch("/{trip_id}/arrive-pickup", response_model=TripResponse)
+def arrive_pickup(
+    trip_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Motorista confirma chegada ao local de carregamento (origem)."""
+    return arrive_pickup_trip(db, current_user, trip_id)
+
+
+@router.patch("/{trip_id}/confirm-loaded", response_model=TripResponse)
+def confirm_loaded(
+    trip_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Motorista confirma que a carga foi totalmente carregada no veículo."""
+    return confirm_loaded_trip(db, current_user, trip_id)
+
+
 @router.patch("/{trip_id}/start", response_model=TripResponse)
 def start(
     trip_id: int,
@@ -57,7 +90,7 @@ def start(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    """Motorista inicia viagem (status viagem_iniciada)."""
+    """Motorista inicia viagem de entrega (status viagem_iniciada)."""
     return start_trip(db, current_user, trip_id, data)
 
 

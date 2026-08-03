@@ -35,7 +35,7 @@ from constants import (
     ROUTE_AVG_SPEED_KMH_MIN,
     WEIGHT_UNITS,
 )
-from controllers.trips_controller import _user_can_access_trip
+from controllers.trips_controller import _user_can_access_trip, log_trip_activity
 from controllers.notifications_controller import create_notification, emit_notification
 from controllers.realtime_events import emit_to_rooms
 from models.models import (
@@ -928,6 +928,14 @@ def accept_proposal(db: Session, user: User, load_id: int, proposal_id: int) -> 
     db.add(trip)
     db.commit()
     db.refresh(trip)
+
+    log_trip_activity(
+        db,
+        trip,
+        event_type="proposta_aceita",
+        title="Proposta Aceite",
+        description=f"A proposta para a carga {load.code} foi aceite. Viagem criada.",
+    )
     targets: set[int] = set()
     if proposal.company_id:
         company = db.query(Company).filter(Company.id == proposal.company_id).first()

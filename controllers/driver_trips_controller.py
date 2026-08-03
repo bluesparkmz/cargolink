@@ -37,13 +37,14 @@ def require_driver(db: Session, user: User) -> Driver:
 
 
 def get_driver_trip(db: Session, driver: Driver, trip_id: int) -> Trip:
-    """Busca viagem do motorista com carga, cliente e paragens."""
+    """Busca viagem do motorista com carga, cliente, paragens e atividades."""
     trip = (
         db.query(Trip)
         .options(
             joinedload(Trip.load).joinedload(Load.client).joinedload(Client.user),
             joinedload(Trip.vehicle),
             joinedload(Trip.stops),
+            joinedload(Trip.activities),
         )
         .filter(Trip.id == trip_id, Trip.driver_id == driver.id)
         .first()
@@ -103,6 +104,19 @@ def build_trip_detail(trip: Trip) -> dict:
     """Monta detalhe completo para o ecrã do motorista."""
     load = trip.load
     client_user = load.client.user if load and load.client else None
+    activities_data = [
+        {
+            "id": act.id,
+            "trip_id": act.trip_id,
+            "event_type": act.event_type,
+            "title": act.title,
+            "description": act.description,
+            "latitude": float(act.latitude) if act.latitude is not None else None,
+            "longitude": float(act.longitude) if act.longitude is not None else None,
+            "created_at": act.created_at,
+        }
+        for act in (trip.activities or [])
+    ]
     data = {
         "id": trip.id,
         "load_id": trip.load_id,
@@ -110,6 +124,9 @@ def build_trip_detail(trip: Trip) -> dict:
         "driver_id": trip.driver_id,
         "vehicle_id": trip.vehicle_id,
         "status": trip.status,
+        "en_route_pickup_at": trip.en_route_pickup_at,
+        "arrived_pickup_at": trip.arrived_pickup_at,
+        "loaded_at": trip.loaded_at,
         "started_at": trip.started_at,
         "arrived_at": trip.arrived_at,
         "client_confirmed_at": trip.client_confirmed_at,
@@ -128,6 +145,7 @@ def build_trip_detail(trip: Trip) -> dict:
         "client_phone": client_user.phone if client_user else None,
         "progress_percent": _calc_progress(trip),
         "stops": trip.stops,
+        "activities": activities_data,
     }
     return data
 
@@ -161,6 +179,33 @@ def get_driver_trip_detail(db: Session, user: User, trip_id: int) -> dict:
     return build_trip_detail(trip)
 
 
+def start_driver_pickup_trip(db: Session, user: User, trip_id: int) -> dict:
+    """Motorista inicia deslocamento para coleta."""
+    from controllers.trips_controller import start_pickup_trip
+
+    trip = start_pickup_trip(db, user, trip_id)
+    driver = require_driver(db, user)
+    return build_trip_detail(get_driver_trip(db, driver, trip.id))
+
+
+def arrive_driver_pickup_trip(db: Session, user: User, trip_id: int) -> dict:
+    """Motorista confirma chegada à coleta."""
+    from controllers.trips_controller import arrive_pickup_trip
+
+    trip = arrive_pickup_trip(db, user, trip_id)
+    driver = require_driver(db, user)
+    return build_trip_detail(get_driver_trip(db, driver, trip.id))
+
+
+def confirm_driver_loaded_trip(db: Session, user: User, trip_id: int) -> dict:
+    """Motorista confirma carga carregada."""
+    from controllers.trips_controller import confirm_loaded_trip
+
+    trip = confirm_loaded_trip(db, user, trip_id)
+    driver = require_driver(db, user)
+    return build_trip_detail(get_driver_trip(db, driver, trip.id))
+
+
 def start_driver_trip(db: Session, user: User, trip_id: int, data: TripStartRequest) -> dict:
     """Motorista inicia viagem."""
     from controllers.trips_controller import start_trip
@@ -186,10 +231,10 @@ def add_driver_location(
     driver = require_driver(db, user)
     trip = get_driver_trip(db, driver, trip_id)
 
-    if trip.status != TRIP_STATUS_STARTED:
+    if trip.status not in (TRIP_STATUS_STARTED, "indo_carregar"):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Localização só durante viagem em curso",
+            detail="Localização só durante viagem ou deslocamento em curso",
         )
 
     if data.traveled_distance_km is not None:

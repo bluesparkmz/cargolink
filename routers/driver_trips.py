@@ -10,11 +10,14 @@ from constants import STOP_TYPES, TRIP_GROUP_COMPLETED, TRIP_GROUP_IN_PROGRESS
 from controllers.driver_trips_controller import (
     add_driver_location,
     add_trip_stop,
+    arrive_driver_pickup_trip,
+    confirm_driver_loaded_trip,
     end_driver_trip,
     get_driver_trip_detail,
     list_driver_locations,
     list_driver_trips,
     list_trip_stops,
+    start_driver_pickup_trip,
     start_driver_trip,
 )
 from deps import get_current_user
@@ -63,6 +66,36 @@ def get_trip_detail(
     return get_driver_trip_detail(db, current_user, trip_id)
 
 
+@router.patch("/{trip_id}/start-pickup", response_model=TripDriverDetailResponse)
+def start_pickup_trip(
+    trip_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Sair para carregar / a caminho da origem da carga."""
+    return start_driver_pickup_trip(db, current_user, trip_id)
+
+
+@router.patch("/{trip_id}/arrive-pickup", response_model=TripDriverDetailResponse)
+def arrive_pickup_trip(
+    trip_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Chegada ao local de carregamento / origem."""
+    return arrive_driver_pickup_trip(db, current_user, trip_id)
+
+
+@router.patch("/{trip_id}/confirm-loaded", response_model=TripDriverDetailResponse)
+def confirm_loaded_trip(
+    trip_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Confirmar que a carga foi carregada no camião."""
+    return confirm_driver_loaded_trip(db, current_user, trip_id)
+
+
 @router.patch("/{trip_id}/start", response_model=TripDriverDetailResponse)
 def start_trip(
     trip_id: int,
@@ -70,7 +103,7 @@ def start_trip(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    """Iniciar viagem."""
+    """Iniciar viagem de entrega."""
     return start_driver_trip(db, current_user, trip_id, data)
 
 
