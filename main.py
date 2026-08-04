@@ -50,9 +50,19 @@ async def lifespan(app: FastAPI):
         from sqlalchemy import text
         with engine.connect() as conn:
             conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS push_token TEXT;"))
+            conn.execute(text("ALTER TABLE trips ADD COLUMN IF NOT EXISTS en_route_pickup_at TIMESTAMP;"))
+            conn.execute(text("ALTER TABLE trips ADD COLUMN IF NOT EXISTS arrived_pickup_at TIMESTAMP;"))
+            conn.execute(text("ALTER TABLE trips ADD COLUMN IF NOT EXISTS loaded_at TIMESTAMP;"))
+            conn.execute(text("ALTER TABLE trips ADD COLUMN IF NOT EXISTS started_at TIMESTAMP;"))
+            conn.execute(text("ALTER TABLE trips ADD COLUMN IF NOT EXISTS arrived_at TIMESTAMP;"))
+            conn.execute(text("ALTER TABLE trips ADD COLUMN IF NOT EXISTS client_confirmed_at TIMESTAMP;"))
+            conn.execute(text("ALTER TABLE trips ADD COLUMN IF NOT EXISTS completed_at TIMESTAMP;"))
+            conn.execute(text("ALTER TABLE trips ADD COLUMN IF NOT EXISTS distancia_total_km NUMERIC(10, 2);"))
+            conn.execute(text("ALTER TABLE trips ADD COLUMN IF NOT EXISTS distancia_percorrida_km NUMERIC(10, 2);"))
+            conn.execute(text("ALTER TABLE trips ADD COLUMN IF NOT EXISTS tempo_estimado TEXT;"))
             conn.commit()
     except Exception as e:
-        logger.warning("Falha ao adicionar coluna push_token via SQL (pode já existir): %s", e)
+        logger.warning("Falha ao adicionar colunas via SQL (pode já existir): %s", e)
 
     logger.info(
         "CargoLink API — M-Pesa sandbox | auto_confirm=%s",
