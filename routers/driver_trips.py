@@ -17,6 +17,7 @@ from controllers.driver_trips_controller import (
     list_driver_locations,
     list_driver_trips,
     list_trip_stops,
+    resume_trip_stop,
     start_driver_pickup_trip,
     start_driver_trip,
 )
@@ -31,6 +32,7 @@ from schemas.schemas import (
     TripLocationResponse,
     TripStartRequest,
     TripStopCreateRequest,
+    TripStopResumeRequest,
     TripStopResponse,
 )
 
@@ -157,3 +159,14 @@ def get_stops(
 ):
     """Listar paragens da viagem."""
     return list_trip_stops(db, current_user, trip_id)
+
+
+@router.patch("/{trip_id}/stops/{stop_id}/resume", response_model=TripStopResponse)
+def resume_stop(
+    trip_id: int,
+    stop_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Motorista retoma viagem — regista hora de saída da paragem."""
+    return resume_trip_stop(db, current_user, trip_id, stop_id)

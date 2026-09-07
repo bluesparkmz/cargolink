@@ -6,7 +6,7 @@ from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 
 from controllers.trips_controller import (
-    _user_can_access_trip,
+    user_can_access_trip,
     add_trip_location,
     arrive_pickup_trip,
     arrive_trip,
@@ -49,7 +49,7 @@ def get_trip(
     """Detalhe da viagem."""
     from controllers.trips_controller import _serialize_trip
     trip = get_trip_detail(db, trip_id)
-    _user_can_access_trip(db, current_user, trip)
+    user_can_access_trip(db, current_user, trip)
     return _serialize_trip(trip)
 
 

@@ -10,6 +10,12 @@ from fastapi import HTTPException, status
 from sqlalchemy.orm import Session, joinedload
 
 from constants import (
+    LOAD_STATUS_ARRIVED_PICKUP,
+    LOAD_STATUS_EN_ROUTE_PICKUP,
+    LOAD_STATUS_IN_TRANSIT,
+    LOAD_STATUS_LOADED,
+    LOAD_STATUS_COMPLETED,
+    LOAD_STATUS_WAITING_CLIENT,
     TRIP_LOCATION_HEARTBEAT_SECONDS,
     TRIP_LOCATION_MIN_DISTANCE_METERS,
     TRIP_LOCATION_MIN_INTERVAL_SECONDS,
@@ -189,7 +195,7 @@ def get_trip_detail(db: Session, trip_id: int) -> Trip:
     return trip
 
 
-def _user_can_access_trip(db: Session, user: User, trip: Trip) -> None:
+def user_can_access_trip(db: Session, user: User, trip: Trip) -> None:
     """Verifica se utilizador é o motorista ou o cliente da carga."""
     if user.user_type == "motorista":
         driver = db.query(Driver).filter(Driver.user_id == user.id).first()
@@ -207,6 +213,10 @@ def _user_can_access_trip(db: Session, user: User, trip: Trip) -> None:
     if user.user_type == "admin":
         return
     raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Sem acesso a esta viagem")
+
+
+# Mantém alias privado para não quebrar imports existentes
+_user_can_access_trip = user_can_access_trip
 
 
 def _sync_live_location(
@@ -459,6 +469,11 @@ def start_pickup_trip(db: Session, user: User, trip_id: int) -> Trip:
 
     trip.status = TRIP_STATUS_EN_ROUTE_PICKUP
     trip.en_route_pickup_at = datetime.now(timezone.utc)
+
+    load = db.query(Load).filter(Load.id == trip.load_id).first()
+    if load:
+        load.status = LOAD_STATUS_EN_ROUTE_PICKUP
+
     db.commit()
     db.refresh(trip)
 
@@ -503,6 +518,11 @@ def arrive_pickup_trip(db: Session, user: User, trip_id: int) -> Trip:
 
     trip.status = TRIP_STATUS_ARRIVED_PICKUP
     trip.arrived_pickup_at = datetime.now(timezone.utc)
+
+    load = db.query(Load).filter(Load.id == trip.load_id).first()
+    if load:
+        load.status = LOAD_STATUS_ARRIVED_PICKUP
+
     db.commit()
     db.refresh(trip)
 
@@ -547,6 +567,11 @@ def confirm_loaded_trip(db: Session, user: User, trip_id: int) -> Trip:
 
     trip.status = TRIP_STATUS_LOADED
     trip.loaded_at = datetime.now(timezone.utc)
+
+    load = db.query(Load).filter(Load.id == trip.load_id).first()
+    if load:
+        load.status = LOAD_STATUS_LOADED
+
     db.commit()
     db.refresh(trip)
 
@@ -612,7 +637,7 @@ def start_trip(db: Session, user: User, trip_id: int, data: TripStartRequest) ->
 
     load = db.query(Load).filter(Load.id == trip.load_id).first()
     if load:
-        load.status = "em_viagem"
+        load.status = LOAD_STATUS_IN_TRANSIT
 
     db.commit()
     db.refresh(trip)
@@ -658,6 +683,11 @@ def arrive_trip(db: Session, user: User, trip_id: int) -> Trip:
 
     trip.status = TRIP_STATUS_WAITING_CLIENT
     trip.arrived_at = datetime.now(timezone.utc)
+
+    load = db.query(Load).filter(Load.id == trip.load_id).first()
+    if load:
+        load.status = LOAD_STATUS_WAITING_CLIENT
+
     db.commit()
     db.refresh(trip)
 
@@ -705,7 +735,7 @@ def confirm_delivery(db: Session, user: User, trip_id: int) -> Trip:
     trip.status = TRIP_STATUS_COMPLETED
     trip.client_confirmed_at = now
     trip.completed_at = now
-    load.status = "concluida"
+    load.status = LOAD_STATUS_COMPLETED
 
     if trip.driver_id:
         driver = db.query(Driver).filter(Driver.id == trip.driver_id).first()
@@ -737,6 +767,37 @@ def confirm_delivery(db: Session, user: User, trip_id: int) -> Trip:
     return get_trip_detail(db, trip.id)
 
 
+def _record_gps_point(
+    db: Session,
+    trip: Trip,
+    driver: Driver,
+    data: TripLocationCreateRequest,
+) -> TripLocation:
+    """Lógica partilhada: atualiza posicao ao vivo e persiste ponto GPS se necessario."""
+    if data.traveled_distance_km is not None:
+        trip.traveled_distance_km = Decimal(str(data.traveled_distance_km))
+
+    latitude = Decimal(str(data.latitude))
+    longitude = Decimal(str(data.longitude))
+    _sync_live_location(trip, driver, latitude, longitude)
+
+    last_location = _latest_trip_location(db, trip.id)
+    if not _should_store_trip_location(last_location, latitude, longitude):
+        db.commit()
+        return last_location
+
+    location = TripLocation(
+        trip_id=trip.id,
+        latitude=latitude,
+        longitude=longitude,
+        speed=Decimal(str(data.speed)) if data.speed is not None else None,
+    )
+    db.add(location)
+    db.commit()
+    db.refresh(location)
+    return location
+
+
 def add_trip_location(
     db: Session, user: User, trip_id: int, data: TripLocationCreateRequest
 ) -> TripLocation:
@@ -758,33 +819,13 @@ def add_trip_location(
             detail="Localização só durante viagem em curso",
         )
 
-    if data.traveled_distance_km is not None:
-        trip.traveled_distance_km = Decimal(str(data.traveled_distance_km))
-
-    latitude = Decimal(str(data.latitude))
-    longitude = Decimal(str(data.longitude))
-    _sync_live_location(trip, driver, latitude, longitude)
-    last_location = _latest_trip_location(db, trip_id)
-    if not _should_store_trip_location(last_location, latitude, longitude):
-        db.commit()
-        return last_location
-
-    location = TripLocation(
-        trip_id=trip_id,
-        latitude=latitude,
-        longitude=longitude,
-        speed=Decimal(str(data.speed)) if data.speed is not None else None,
-    )
-    db.add(location)
-    db.commit()
-    db.refresh(location)
-    return location
+    return _record_gps_point(db, trip, driver, data)
 
 
 def list_trip_locations(db: Session, user: User, trip_id: int) -> list[TripLocation]:
     """Lista pontos GPS da viagem."""
     trip = get_trip_detail(db, trip_id)
-    _user_can_access_trip(db, user, trip)
+    user_can_access_trip(db, user, trip)
     return (
         db.query(TripLocation)
         .filter(TripLocation.trip_id == trip_id)

@@ -14,6 +14,9 @@ from constants import (
     TRIP_GROUP_COMPLETED,
     TRIP_GROUP_IN_PROGRESS,
     TRIP_GROUP_STATUSES,
+    TRIP_STATUS_ARRIVED_PICKUP,
+    TRIP_STATUS_EN_ROUTE_PICKUP,
+    TRIP_STATUS_LOADED,
     TRIP_STATUS_STARTED,
 )
 from models.models import Client, Driver, Load, Trip, TripLocation, TripStop, User
@@ -82,6 +85,23 @@ def _sync_live_location(
         trip.vehicle.location_updated_at = now
 
 
+def _serialize_stop(s: TripStop) -> dict:
+    """Converte ORM TripStop para dict — evita DetachedInstanceError."""
+    return {
+        "id": s.id,
+        "trip_id": s.trip_id,
+        "stop_type": s.stop_type,
+        "location_name": s.location_name,
+        "address": s.address,
+        "notes": s.notes,
+        "latitude": float(s.latitude) if s.latitude is not None else None,
+        "longitude": float(s.longitude) if s.longitude is not None else None,
+        "stopped_at": s.stopped_at,
+        "resumed_at": s.resumed_at,
+        "created_at": s.created_at,
+    }
+
+
 def build_trip_list_item(trip: Trip) -> dict:
     """Monta item para lista Minhas Viagens."""
     load = trip.load
@@ -117,7 +137,9 @@ def build_trip_detail(trip: Trip) -> dict:
         }
         for act in (trip.activities or [])
     ]
-    data = {
+    stops_data = [_serialize_stop(s) for s in (trip.stops or [])]
+
+    return {
         "id": trip.id,
         "load_id": trip.load_id,
         "company_id": trip.company_id,
@@ -144,10 +166,9 @@ def build_trip_detail(trip: Trip) -> dict:
         "client_name": client_user.name if client_user else "",
         "client_phone": client_user.phone if client_user else None,
         "progress_percent": _calc_progress(trip),
-        "stops": trip.stops,
+        "stops": stops_data,
         "activities": activities_data,
     }
-    return data
 
 
 def list_driver_trips(db: Session, user: User, group: str | None = None) -> list[dict]:
@@ -183,83 +204,70 @@ def start_driver_pickup_trip(db: Session, user: User, trip_id: int) -> dict:
     """Motorista inicia deslocamento para coleta."""
     from controllers.trips_controller import start_pickup_trip
 
-    trip = start_pickup_trip(db, user, trip_id)
+    start_pickup_trip(db, user, trip_id)
     driver = require_driver(db, user)
-    return build_trip_detail(get_driver_trip(db, driver, trip.id))
+    return build_trip_detail(get_driver_trip(db, driver, trip_id))
 
 
 def arrive_driver_pickup_trip(db: Session, user: User, trip_id: int) -> dict:
     """Motorista confirma chegada à coleta."""
     from controllers.trips_controller import arrive_pickup_trip
 
-    trip = arrive_pickup_trip(db, user, trip_id)
+    arrive_pickup_trip(db, user, trip_id)
     driver = require_driver(db, user)
-    return build_trip_detail(get_driver_trip(db, driver, trip.id))
+    return build_trip_detail(get_driver_trip(db, driver, trip_id))
 
 
 def confirm_driver_loaded_trip(db: Session, user: User, trip_id: int) -> dict:
     """Motorista confirma carga carregada."""
     from controllers.trips_controller import confirm_loaded_trip
 
-    trip = confirm_loaded_trip(db, user, trip_id)
+    confirm_loaded_trip(db, user, trip_id)
     driver = require_driver(db, user)
-    return build_trip_detail(get_driver_trip(db, driver, trip.id))
+    return build_trip_detail(get_driver_trip(db, driver, trip_id))
 
 
 def start_driver_trip(db: Session, user: User, trip_id: int, data: TripStartRequest) -> dict:
     """Motorista inicia viagem."""
     from controllers.trips_controller import start_trip
 
-    trip = start_trip(db, user, trip_id, data)
+    start_trip(db, user, trip_id, data)
     driver = require_driver(db, user)
-    return build_trip_detail(get_driver_trip(db, driver, trip.id))
+    return build_trip_detail(get_driver_trip(db, driver, trip_id))
 
 
 def end_driver_trip(db: Session, user: User, trip_id: int) -> dict:
     """Motorista encerra viagem / confirma chegada ao destino."""
     from controllers.trips_controller import arrive_trip
 
-    trip = arrive_trip(db, user, trip_id)
+    arrive_trip(db, user, trip_id)
     driver = require_driver(db, user)
-    return build_trip_detail(get_driver_trip(db, driver, trip.id))
+    return build_trip_detail(get_driver_trip(db, driver, trip_id))
 
 
 def add_driver_location(
     db: Session, user: User, trip_id: int, data: TripLocationCreateRequest
 ) -> TripLocation:
-    """Envia GPS e opcionalmente atualiza distância percorrida."""
+    """Envia GPS e opcionalmente atualiza distância percorrida.
+    Aceita localização em qualquer estado ativo da viagem.
+    """
+    from controllers.trips_controller import _record_gps_point
+
     driver = require_driver(db, user)
     trip = get_driver_trip(db, driver, trip_id)
 
-    if trip.status not in (TRIP_STATUS_STARTED, "indo_carregar"):
+    if trip.status not in (
+        TRIP_STATUS_EN_ROUTE_PICKUP,
+        TRIP_STATUS_ARRIVED_PICKUP,
+        TRIP_STATUS_LOADED,
+        TRIP_STATUS_STARTED,
+    ):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Localização só durante viagem ou deslocamento em curso",
         )
 
-    if data.traveled_distance_km is not None:
-        trip.traveled_distance_km = Decimal(str(data.traveled_distance_km))
-
-    latitude = Decimal(str(data.latitude))
-    longitude = Decimal(str(data.longitude))
-    _sync_live_location(trip, driver, latitude, longitude)
-    from controllers.trips_controller import _latest_trip_location, _should_store_trip_location
-
-    last_location = _latest_trip_location(db, trip_id)
-    if not _should_store_trip_location(last_location, latitude, longitude):
-        db.commit()
-        return last_location
-
-    location = TripLocation(
-        trip_id=trip_id,
-        latitude=latitude,
-        longitude=longitude,
-        speed=Decimal(str(data.speed)) if data.speed is not None else None,
-    )
-    db.add(location)
-    db.commit()
-    db.refresh(location)
-    return location
+    return _record_gps_point(db, trip, driver, data)
 
 
 def list_driver_locations(db: Session, user: User, trip_id: int) -> list[TripLocation]:
@@ -298,9 +306,38 @@ def add_trip_stop(db: Session, user: User, trip_id: int, data: TripStopCreateReq
         location_name=data.location_name,
         address=data.address,
         notes=data.notes,
+        latitude=Decimal(str(data.latitude)) if data.latitude is not None else None,
+        longitude=Decimal(str(data.longitude)) if data.longitude is not None else None,
         stopped_at=stopped_at,
     )
     db.add(stop)
+    db.commit()
+    db.refresh(stop)
+    return stop
+
+
+def resume_trip_stop(db: Session, user: User, trip_id: int, stop_id: int) -> TripStop:
+    """Motorista retoma viagem — regista hora de saída da paragem."""
+    driver = require_driver(db, user)
+    get_driver_trip(db, driver, trip_id)  # valida ownership
+
+    stop = (
+        db.query(TripStop)
+        .filter(TripStop.id == stop_id, TripStop.trip_id == trip_id)
+        .first()
+    )
+    if stop is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Paragem não encontrada",
+        )
+    if stop.resumed_at is not None:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Paragem já foi encerrada",
+        )
+
+    stop.resumed_at = datetime.now(timezone.utc)
     db.commit()
     db.refresh(stop)
     return stop

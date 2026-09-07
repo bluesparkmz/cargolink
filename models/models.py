@@ -350,7 +350,10 @@ class TripStop(Base):
     location_name: Mapped[str | None] = mapped_column("nome_local", String(150))
     address: Mapped[str | None] = mapped_column("endereco", Text)
     notes: Mapped[str | None] = mapped_column("observacao", Text)
+    latitude: Mapped[Decimal | None] = mapped_column(Numeric(10, 7))
+    longitude: Mapped[Decimal | None] = mapped_column(Numeric(10, 7))
     stopped_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
+    resumed_at: Mapped[datetime | None] = mapped_column(DateTime)
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
 
     trip: Mapped[Trip] = relationship(back_populates="stops")

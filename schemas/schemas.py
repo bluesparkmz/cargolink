@@ -867,6 +867,8 @@ class TripStopCreateRequest(BaseModel):
     location_name: str | None = None
     address: str | None = None
     notes: str | None = None
+    latitude: float | None = Field(None, ge=-90, le=90)
+    longitude: float | None = Field(None, ge=-180, le=180)
     stopped_at: datetime | None = None
 
 
@@ -879,10 +881,19 @@ class TripStopResponse(BaseModel):
     location_name: str | None = None
     address: str | None = None
     notes: str | None = None
+    latitude: float | None = None
+    longitude: float | None = None
     stopped_at: datetime
+    resumed_at: datetime | None = None
     created_at: datetime
 
     model_config = {"from_attributes": True}
+
+
+class TripStopResumeRequest(BaseModel):
+    """Retomar viagem após paragem — regista hora de saída."""
+
+    resumed_at: datetime | None = None
 
 
 class TripDriverListItem(BaseModel):

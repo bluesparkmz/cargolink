@@ -33,6 +33,11 @@ from constants import (
     PROPOSAL_STATUS_REJECTED,
     ROUTE_AVG_SPEED_KMH_MAX,
     ROUTE_AVG_SPEED_KMH_MIN,
+    TRIP_STATUS_ARRIVED_PICKUP,
+    TRIP_STATUS_EN_ROUTE_PICKUP,
+    TRIP_STATUS_LOADED,
+    TRIP_STATUS_STARTED,
+    TRIP_STATUS_WAITING_CLIENT,
     WEIGHT_UNITS,
 )
 from controllers.trips_controller import _user_can_access_trip, log_trip_activity
@@ -666,8 +671,11 @@ def get_load_tracking(db: Session, user: User, load_id: int) -> dict:
     elif user.user_type != "admin":
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Sem acesso")
     trackable = trip is not None and trip.status in (
-        "viagem_iniciada",
-        "aguardando_cliente",
+        TRIP_STATUS_EN_ROUTE_PICKUP,
+        TRIP_STATUS_ARRIVED_PICKUP,
+        TRIP_STATUS_LOADED,
+        TRIP_STATUS_STARTED,
+        TRIP_STATUS_WAITING_CLIENT,
     )
     locations: list[TripLocation] = []
     last_location = None

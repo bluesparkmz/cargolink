@@ -45,14 +45,17 @@ logger = logging.getLogger(__name__)
 async def lifespan(app: FastAPI):
     """Cria tabelas ao arrancar (em dev; em produção usar migrações Alembic)."""
     Base.metadata.create_all(bind=engine)
-    # Garante que a coluna push_token existe na tabela users
+    # Garante colunas de tabelas existentes
     try:
         from sqlalchemy import text
         with engine.connect() as conn:
             conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS push_token TEXT;"))
+            conn.execute(text("ALTER TABLE trips ADD COLUMN IF NOT EXISTS en_route_pickup_at TIMESTAMP;"))
+            conn.execute(text("ALTER TABLE trips ADD COLUMN IF NOT EXISTS arrived_pickup_at TIMESTAMP;"))
+            conn.execute(text("ALTER TABLE trips ADD COLUMN IF NOT EXISTS loaded_at TIMESTAMP;"))
             conn.commit()
     except Exception as e:
-        logger.warning("Falha ao adicionar coluna push_token via SQL (pode já existir): %s", e)
+        logger.warning("Falha ao adicionar colunas via SQL (podem já existir): %s", e)
 
     logger.info(
         "CargoLink API — M-Pesa sandbox | auto_confirm=%s",

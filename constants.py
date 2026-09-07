@@ -42,7 +42,10 @@ MAX_LOAD_IMAGES = 5
 # Unidades de peso aceites
 WEIGHT_UNITS = ["ton", "kg"]
 
+# ---------------------------------------------------------------------------
 # Estados da viagem
+# ---------------------------------------------------------------------------
+
 TRIP_STATUS_WAITING = "aguardando_inicio"
 TRIP_STATUS_EN_ROUTE_PICKUP = "indo_carregar"
 TRIP_STATUS_ARRIVED_PICKUP = "chegou_origem"
@@ -82,21 +85,41 @@ STOP_TYPES = [
 
 STOP_TYPE_IDS = {item["id"] for item in STOP_TYPES}
 
-# Status de carga
+# ---------------------------------------------------------------------------
+# Status de carga — espelham os estados da viagem correspondentes
+# ---------------------------------------------------------------------------
+
 LOAD_STATUS_AVAILABLE = "disponivel"
 LOAD_STATUS_ACCEPTED = "aceite"
+LOAD_STATUS_EN_ROUTE_PICKUP = TRIP_STATUS_EN_ROUTE_PICKUP   # "indo_carregar"
+LOAD_STATUS_ARRIVED_PICKUP = TRIP_STATUS_ARRIVED_PICKUP      # "chegou_origem"
+LOAD_STATUS_LOADED = TRIP_STATUS_LOADED                      # "carregado"
 LOAD_STATUS_IN_TRANSIT = "em_viagem"
+LOAD_STATUS_WAITING_CLIENT = "aguardando_cliente"            # motorista chegou, aguarda cliente
 LOAD_STATUS_COMPLETED = "concluida"
 LOAD_STATUS_CANCELLED = "cancelada"
 
-LOAD_ACTIVE_STATUSES = [LOAD_STATUS_ACCEPTED, LOAD_STATUS_IN_TRANSIT]
+LOAD_ACTIVE_STATUSES = [
+    LOAD_STATUS_ACCEPTED,
+    LOAD_STATUS_EN_ROUTE_PICKUP,
+    LOAD_STATUS_ARRIVED_PICKUP,
+    LOAD_STATUS_LOADED,
+    LOAD_STATUS_IN_TRANSIT,
+    LOAD_STATUS_WAITING_CLIENT,
+]
 
+# ---------------------------------------------------------------------------
 # Status exibidos no feed de atividades do cliente
+# ---------------------------------------------------------------------------
+
 ACTIVITY_IN_PROGRESS = "em_andamento"
 ACTIVITY_NEGOTIATING = "em_negociacao"
 ACTIVITY_COMPLETED = "concluida"
 
+# ---------------------------------------------------------------------------
 # Status de propostas e negociacoes
+# ---------------------------------------------------------------------------
+
 PROPOSAL_STATUS_PENDING = "pendente"
 PROPOSAL_STATUS_NEGOTIATING = "em_negociacao"
 PROPOSAL_STATUS_ACCEPTED = "aceite"
@@ -108,7 +131,10 @@ NEGOTIATION_STATUS_ACCEPTED = "aceite"
 NEGOTIATION_STATUS_REJECTED = "recusada"
 NEGOTIATION_STATUS_REPLACED = "substituida"
 
+# ---------------------------------------------------------------------------
 # Veículos
+# ---------------------------------------------------------------------------
+
 VEHICLE_STATUS_AVAILABLE = "disponivel"
 VEHICLE_STATUS_UNAVAILABLE = "indisponivel"
 VEHICLE_STATUS_MAINTENANCE = "manutencao"
@@ -120,7 +146,10 @@ VEHICLE_STATUSES = {
     VEHICLE_STATUS_INACTIVE,
 }
 
+# ---------------------------------------------------------------------------
 # Utilizadores
+# ---------------------------------------------------------------------------
+
 USER_TYPE_USUARIO = "usuario"
 USER_TYPE_CLIENT = "cliente"
 USER_TYPE_COMPANY = "empresa"
@@ -128,7 +157,10 @@ USER_TYPE_DRIVER = "motorista"
 USER_STATUS_PENDING = "pendente"
 USER_STATUS_ACTIVE = "ativo"
 
+# ---------------------------------------------------------------------------
 # Carteira e pagamentos
+# ---------------------------------------------------------------------------
+
 TRANSACTION_TYPE_DEPOSIT = "deposito"
 TRANSACTION_TYPE_WITHDRAWAL = "levantamento"
 PAYMENT_METHOD_MPESA = "mpesa"
@@ -138,7 +170,10 @@ PAYMENT_STATUS_FAILED = "falhou"
 TRANSACTION_STATUS_PENDING = "pendente"
 TRANSACTION_STATUS_COMPLETED = "concluido"
 
+# ---------------------------------------------------------------------------
 # Tipos de documento (perfil)
+# ---------------------------------------------------------------------------
+
 DOCUMENT_TYPES = [
     {"id": "bi", "label": "Bilhete de Identidade"},
     {"id": "carta", "label": "Carta de condução"},
@@ -152,7 +187,10 @@ DOCUMENT_STATUS_PENDING = "pendente"
 DOCUMENT_STATUS_APPROVED = "aprovado"
 DOCUMENT_STATUS_REJECTED = "rejeitado"
 
+# ---------------------------------------------------------------------------
 # Segurança de uploads: extensões e MIME types bloqueados
+# ---------------------------------------------------------------------------
+
 BLOCKED_FILE_EXTENSIONS = {
     # Linguagens de programação e scripting
     ".py", ".js", ".ts", ".jsx", ".tsx", ".php", ".php3", ".php4", ".php5", ".php6", ".php7", ".php8",
