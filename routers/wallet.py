@@ -15,6 +15,7 @@ from controllers.wallet_controller import (
     process_mpesa_callback,
     sync_deposit_with_mpesa,
 )
+from controllers.wallet_transport_controller import get_transport_payment_status, pay_accepted_proposal_from_wallet
 from database import get_db
 from deps import get_current_user
 from models.models import User
@@ -70,13 +71,13 @@ async def request_deposit_with_polling(
 ):
     """
     Inicia depósito e aguarda confirmação do usuário via polling automático (até 60s).
-    
+
     Diferente de /deposits que retorna imediatamente, esta rota:
     1. Inicia o pagamento M-Pesa
     2. Aguarda automaticamente o usuário confirmar no telemóvel
     3. Credita o saldo se confirmado
     4. Retorna erro se rejeitado ou timeout
-    
+
     Use esta rota para fluxo mais direto sem callbacks de webhook.
     """
     return await create_deposit_with_polling(
@@ -116,6 +117,24 @@ def confirm_deposit_route(
 ):
     """Confirma depósito pendente (callback M-Pesa ou ambiente sem auto-confirmação)."""
     return confirm_deposit(db, current_user, payment_id)
+
+
+@router.get("/proposal-payments/{proposal_id}")
+def proposal_payment_status_route(
+    proposal_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    return get_transport_payment_status(db, current_user, proposal_id)
+
+
+@router.post("/proposal-payments/{proposal_id}")
+def pay_proposal_from_wallet_route(
+    proposal_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    return pay_accepted_proposal_from_wallet(db, current_user, proposal_id)
 
 
 @router.get("", response_model=WalletBalanceResponse)

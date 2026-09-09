@@ -30,6 +30,7 @@ from constants import (
 )
 from controllers.notifications_controller import create_notification, emit_notification
 from controllers.realtime_events import emit_to_rooms
+from controllers.wallet_transport_controller import release_transport_escrow_for_trip
 from models.models import Client, Company, Driver, Load, Trip, TripActivity, TripLocation, User, Vehicle
 from schemas.schemas import TripLocationCreateRequest, TripStartRequest
 
@@ -812,6 +813,8 @@ def confirm_delivery(db: Session, user: User, trip_id: int) -> Trip:
         body="A entrega foi confirmada pelo cliente.",
         notification_type="trip.completed",
     )
+    # Wallet: liberta o valor retido após confirmação do cliente.
+    release_transport_escrow_for_trip(db, trip)
     return get_trip_detail(db, trip.id)
 
 
