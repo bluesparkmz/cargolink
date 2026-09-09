@@ -9,7 +9,6 @@ from sqlalchemy.orm import Session, joinedload
 from models.models import Company, Driver, LoadProposal, Trip, User
 from schemas.schemas import CompanyProfileUpdateRequest
 from security import generate_random_password, hash_password
-from controllers.realtime_events import emit_to_user
 
 
 def require_company(user: User) -> None:
@@ -119,7 +118,6 @@ def attach_driver_to_company(db: Session, user: User, email: str) -> Driver:
     driver.company_id = company.id
     db.commit()
     db.refresh(driver)
-    emit_to_user(user.id, {'type':'driver.attached','driver_id':driver.id,'company_id':company.id})
     return driver
 
 
@@ -144,7 +142,6 @@ def detach_driver_from_company(db: Session, user: User, driver_id: int) -> None:
             detail="Motorista nao encontrado nesta empresa",
         )
     _detach_driver_from_company(db, company, driver)
-    emit_to_user(user.id, {'type':'driver.detached','driver_id':driver.id,'company_id':company.id})
 
 
 def detach_driver_from_company_by_email(db: Session, user: User, email: str) -> None:
@@ -152,7 +149,6 @@ def detach_driver_from_company_by_email(db: Session, user: User, email: str) -> 
     company = get_my_company(db, user)
     driver = get_company_driver_by_email(db, company, email)
     _detach_driver_from_company(db, company, driver)
-    emit_to_user(user.id, {'type':'driver.detached','driver_id':driver.id,'company_id':company.id})
 
 
 def _detach_driver_from_company(db: Session, company: Company, driver: Driver) -> None:
@@ -247,11 +243,10 @@ def create_driver_for_company(
     db.commit()
     db.refresh(new_driver)
     
-    created_driver = (
+    return (
         db.query(Driver)
         .options(joinedload(Driver.user))
         .filter(Driver.id == new_driver.id)
-        .first()
+        .first(),
+        temporary_password,
     )
-    emit_to_user(user.id, {'type':'driver.created','driver_id':created_driver.id,'company_id':company.id})
-    return created_driver, temporary_password

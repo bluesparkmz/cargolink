@@ -6,7 +6,6 @@ from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 
 from controllers.trips_controller import (
-    assign_vehicle_to_trip,
     user_can_access_trip,
     add_trip_location,
     arrive_pickup_trip,
@@ -23,7 +22,6 @@ from deps import get_current_user
 from database import get_db
 from models.models import User
 from schemas.schemas import (
-    TripAssignVehicleRequest,
     TripLocationCreateRequest,
     TripLocationResponse,
     TripResponse,
@@ -53,11 +51,6 @@ def get_trip(
     trip = get_trip_detail(db, trip_id)
     user_can_access_trip(db, current_user, trip)
     return _serialize_trip(trip)
-
-
-@router.patch('/{trip_id}/assign-vehicle', response_model=TripResponse)
-def assign_vehicle(trip_id: int, data: TripAssignVehicleRequest, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
-    return assign_vehicle_to_trip(db, current_user, trip_id, data.vehicle_id)
 
 
 @router.patch("/{trip_id}/start-pickup", response_model=TripResponse)

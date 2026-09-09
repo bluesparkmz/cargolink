@@ -820,11 +820,6 @@ class TripResponse(BaseModel):
     model_config = {"from_attributes": True}
 
 
-class TripAssignVehicleRequest(BaseModel):
-    # Empresa atribui camiao com motorista a uma viagem aceite.
-    vehicle_id: int = Field(..., gt=0)
-
-
 class TripStartRequest(BaseModel):
     """Iniciar viagem (opcional: veículo e distância estimada)."""
 

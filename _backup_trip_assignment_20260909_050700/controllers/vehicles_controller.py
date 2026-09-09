@@ -294,4 +294,3 @@ def deactivate_vehicle(db: Session, user: User, vehicle_id: int) -> None:
     vehicle.status = VEHICLE_STATUS_INACTIVE
     db.commit()
     emit_to_user(user.id, {'type':'vehicle.deactivated','vehicle_id':vehicle.id,'company_id':vehicle.company_id})
-    emit_to_user(user.id, {'type':'vehicle.deactivated','vehicle_id':vehicle.id,'company_id':vehicle.company_id})

@@ -15,7 +15,6 @@ from config import settings
 from constants import VEHICLE_STATUSES, VEHICLE_STATUS_INACTIVE
 from controllers.companies_controller import get_company_driver_by_email
 from controllers.drivers_controller import get_my_driver
-from controllers.realtime_events import emit_to_user
 from models.models import Company, Driver, User, Vehicle
 from schemas.schemas import VehicleCreateRequest, VehicleUpdateRequest
 
@@ -222,9 +221,7 @@ def create_vehicle(
     vehicle = Vehicle(company_id=company.id, **payload)
     db.add(vehicle)
     db.commit()
-    created = get_vehicle_by_id(db, vehicle.id)
-    emit_to_user(user.id, {'type':'vehicle.created','vehicle_id':created.id,'company_id':company.id})
-    return created
+    return get_vehicle_by_id(db, vehicle.id)
 
 
 def update_vehicle(
@@ -278,9 +275,7 @@ def update_vehicle(
         setattr(vehicle, field, value)
 
     db.commit()
-    updated = get_vehicle_by_id(db, vehicle_id)
-    emit_to_user(user.id, {'type':'vehicle.updated','vehicle_id':updated.id,'company_id':company.id,'driver_id':updated.driver_id})
-    return updated
+    return get_vehicle_by_id(db, vehicle_id)
 
 
 def deactivate_vehicle(db: Session, user: User, vehicle_id: int) -> None:
@@ -293,5 +288,3 @@ def deactivate_vehicle(db: Session, user: User, vehicle_id: int) -> None:
     vehicle = _get_own_vehicle(db, user, vehicle_id)
     vehicle.status = VEHICLE_STATUS_INACTIVE
     db.commit()
-    emit_to_user(user.id, {'type':'vehicle.deactivated','vehicle_id':vehicle.id,'company_id':vehicle.company_id})
-    emit_to_user(user.id, {'type':'vehicle.deactivated','vehicle_id':vehicle.id,'company_id':vehicle.company_id})

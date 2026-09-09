@@ -26,7 +26,6 @@ from constants import (
     TRIP_STATUS_STARTED,
     TRIP_STATUS_WAITING,
     TRIP_STATUS_WAITING_CLIENT,
-    VEHICLE_STATUS_AVAILABLE,
 )
 from controllers.notifications_controller import create_notification, emit_notification
 from controllers.realtime_events import emit_to_rooms
@@ -447,53 +446,6 @@ def list_my_trips(db: Session, user: User) -> list[dict]:
             )
 
     return [_serialize_trip(t) for t in trips]
-
-
-
-def assign_vehicle_to_trip(db: Session, user: User, trip_id: int, vehicle_id: int) -> dict:
-    # Empresa atribui camiao e motorista a uma viagem aceite.
-    if user.user_type != 'empresa':
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail='Apenas a empresa transportadora pode atribuir o camiao')
-    company = db.query(Company).filter(Company.user_id == user.id).first()
-    if company is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail='Perfil de empresa nao encontrado')
-    trip = get_trip_detail(db, trip_id)
-    if trip.company_id != company.id:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail='Esta viagem pertence a outra empresa')
-    if trip.status != TRIP_STATUS_WAITING:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail='O camiao so pode ser atribuido antes do motorista iniciar a recolha')
-
-    vehicle = db.query(Vehicle).options(joinedload(Vehicle.driver).joinedload(Driver.user)).filter(Vehicle.id == vehicle_id).first()
-    if vehicle is None or vehicle.company_id != company.id:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail='Camiao invalido para esta empresa')
-    if vehicle.status != VEHICLE_STATUS_AVAILABLE:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail='O camiao selecionado nao esta disponivel')
-    if vehicle.driver_id is None:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail='Este camiao nao tem motorista atribuido. Atribua um motorista antes de usar o camiao nesta carga.')
-
-    driver = vehicle.driver or db.query(Driver).filter(Driver.id == vehicle.driver_id).first()
-    if driver is None or driver.company_id != company.id:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail='Motorista invalido para este camiao')
-    if not driver.available:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail='O motorista deste camiao nao esta disponivel')
-
-    if db.query(Trip).filter(Trip.id != trip.id, Trip.vehicle_id == vehicle.id, Trip.status != TRIP_STATUS_COMPLETED).first():
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail='Este camiao ja esta atribuido a outra viagem ativa')
-    if db.query(Trip).filter(Trip.id != trip.id, Trip.driver_id == driver.id, Trip.status != TRIP_STATUS_COMPLETED).first():
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail='O motorista deste camiao ja esta atribuido a outra viagem ativa')
-
-    trip.vehicle_id = vehicle.id
-    trip.driver_id = driver.id
-    db.commit(); db.refresh(trip)
-    load = db.query(Load).filter(Load.id == trip.load_id).first()
-    code = load.code if load else f'#{trip.load_id}'
-    rota = f' {load.origin} -> {load.destination}.' if load else ''
-    log_trip_activity(db, trip, event_type='trip_assigned', title='Camiao e motorista atribuidos', description=f'Camiao {vehicle.plate} atribuido a viagem.')
-
-    notification = create_notification(db, user_id=driver.user_id, title='Nova carga atribuida', body=f'Foi-lhe atribuida a carga {code}.{rota}', notification_type='trip.assigned', payload={'trip_id':trip.id,'load_id':trip.load_id,'vehicle_id':vehicle.id,'driver_id':driver.id})
-    db.commit(); db.refresh(notification); emit_notification(notification)
-    emit_to_rooms(_trip_event_rooms(trip), {'type':'trip.assigned','trip_id':trip.id,'load_id':trip.load_id,'company_id':trip.company_id,'driver_id':driver.id,'vehicle_id':vehicle.id,'status':trip.status})
-    return _serialize_trip(get_trip_detail(db, trip.id))
 
 
 def start_pickup_trip(db: Session, user: User, trip_id: int) -> Trip:
