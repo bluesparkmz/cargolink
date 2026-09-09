@@ -23,6 +23,7 @@ from schemas.schemas import (
     LocationUpdateRequest,
     VehicleCreateRequest,
     VehicleDetailResponse,
+    VehicleDriverAssignmentRequest,
     VehicleListItem,
     VehicleUpdateRequest,
 )
@@ -122,6 +123,23 @@ def patch_location(
     return _to_list_item(vehicle)
 
 
+@router.patch("/{vehicle_id}/driver", response_model=VehicleListItem)
+def patch_driver(
+    vehicle_id: int,
+    data: VehicleDriverAssignmentRequest,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    # Empresa associa ou remove o motorista de um camião.
+    vehicle = update_vehicle(
+        db,
+        current_user,
+        vehicle_id=vehicle_id,
+        data=VehicleUpdateRequest(driver_id=data.driver_id),
+    )
+    return _to_list_item(vehicle)
+
+
 @router.patch("/{vehicle_id}", response_model=VehicleListItem)
 def patch(
     vehicle_id: int,
@@ -141,16 +159,21 @@ def patch(
     db: Session = Depends(get_db),
 ):
     """Empresa atualiza o camiao (com foto opcional)."""
-    data = VehicleUpdateRequest(
-        plate=plate,
-        driver_id=driver_id,
-        driver_email=driver_email,
-        brand=brand,
-        model_name=model_name,
-        vehicle_type=vehicle_type,
-        tonnage_capacity=tonnage_capacity,
-        status=status,
-    )
+    payload = {
+        key: value
+        for key, value in {
+            "plate": plate,
+            "driver_id": driver_id,
+            "driver_email": driver_email,
+            "brand": brand,
+            "model_name": model_name,
+            "vehicle_type": vehicle_type,
+            "tonnage_capacity": tonnage_capacity,
+            "status": status,
+        }.items()
+        if value is not None
+    }
+    data = VehicleUpdateRequest(**payload)
     vehicle = update_vehicle(db, current_user, vehicle_id=vehicle_id, data=data, photo_file=photo)
     return _to_list_item(vehicle)
 

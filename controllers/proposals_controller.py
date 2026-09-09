@@ -230,6 +230,28 @@ def _proposal_user_ids(db: Session, proposal: LoadProposal) -> set[int]:
     return user_ids
 
 
+def _proposal_acceptance_user_ids(db: Session, proposal: LoadProposal) -> set[int]:
+    # Cliente + empresa. Motorista só participa após trip.assigned.
+    user_ids: set[int] = set()
+    load = proposal.load or db.query(Load).filter(Load.id == proposal.load_id).first()
+    if load:
+        client = db.query(Client).filter(Client.id == load.client_id).first()
+        if client:
+            user_ids.add(client.user_id)
+    if proposal.company_id:
+        company = db.query(Company).filter(Company.id == proposal.company_id).first()
+        if company:
+            user_ids.add(company.user_id)
+    return user_ids
+
+
+def _proposal_acceptance_rooms(proposal: LoadProposal) -> set[str]:
+    rooms = {f"load:{proposal.load_id}", f"proposal:{proposal.id}"}
+    if proposal.company_id:
+        rooms.add(f"company:{proposal.company_id}")
+    return rooms
+
+
 def _proposal_rooms(proposal: LoadProposal) -> set[str]:
     rooms = {f"load:{proposal.load_id}", f"proposal:{proposal.id}"}
     if proposal.company_id:
@@ -276,8 +298,8 @@ def _close_proposal_as_accepted(db: Session, proposal: LoadProposal) -> None:
         Trip(
             load_id=proposal.load_id,
             company_id=proposal.company_id,
-            driver_id=proposal.driver_id,
-            vehicle_id=proposal.vehicle_id,
+            driver_id=None,
+            vehicle_id=None,
         )
     )
 
@@ -476,7 +498,7 @@ def accept_counter_offer(
             db,
             user_id=user_id,
             title="Contraproposta aceite",
-            body="A contraproposta foi aceite e a viagem foi criada.",
+            body="A contraproposta foi aceite. A empresa deve atribuir um camião para iniciar o transporte.",
             notification_type="negotiation.accepted",
             payload={
                 "proposal_id": proposal.id,
@@ -485,14 +507,14 @@ def accept_counter_offer(
                 "trip_id": trip.id if trip else None,
             },
         )
-        for user_id in (_proposal_user_ids(db, proposal) - {user.id})
+        for user_id in (_proposal_acceptance_user_ids(db, proposal) - {user.id})
     ]
     db.commit()
     for notification in notifications:
         db.refresh(notification)
         emit_notification(notification)
     emit_to_rooms(
-        _proposal_rooms(proposal) | ({f"trip:{trip.id}"} if trip else set()),
+        _proposal_acceptance_rooms(proposal) | ({f"trip:{trip.id}"} if trip else set()),
         {
             "type": "negotiation.accepted",
             "proposal_id": proposal.id,

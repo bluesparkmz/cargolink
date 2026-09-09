@@ -927,11 +927,13 @@ def accept_proposal(db: Session, user: User, load_id: int, proposal_id: int) -> 
         )
 
     load.status = LOAD_STATUS_ACCEPTED
+    # A proposta aceite define apenas a empresa vencedora.
+    # O camião e o motorista serão escolhidos manualmente pela empresa.
     trip = Trip(
         load_id=load_id,
         company_id=proposal.company_id,
-        driver_id=proposal.driver_id,
-        vehicle_id=proposal.vehicle_id,
+        driver_id=None,
+        vehicle_id=None,
     )
     db.add(trip)
     db.commit()
@@ -949,16 +951,12 @@ def accept_proposal(db: Session, user: User, load_id: int, proposal_id: int) -> 
         company = db.query(Company).filter(Company.id == proposal.company_id).first()
         if company:
             targets.add(company.user_id)
-    if proposal.driver_id:
-        driver = db.query(Driver).filter(Driver.id == proposal.driver_id).first()
-        if driver:
-            targets.add(driver.user_id)
     notifications = [
         create_notification(
             db,
             user_id=user_id,
             title="Proposta aceite",
-            body=f"A proposta para a carga {load.code} foi aceite. A viagem foi criada.",
+            body=f"A proposta para a carga {load.code} foi aceite. Atribua um camião para iniciar o transporte.",
             notification_type="proposal.accepted",
             payload={"load_id": load.id, "proposal_id": proposal.id, "trip_id": trip.id},
         )
@@ -973,7 +971,6 @@ def accept_proposal(db: Session, user: User, load_id: int, proposal_id: int) -> 
             f"load:{load.id}",
             f"trip:{trip.id}",
             f"company:{proposal.company_id}" if proposal.company_id else "",
-            f"driver:{proposal.driver_id}" if proposal.driver_id else "",
         }
         - {""},
         {
@@ -1023,10 +1020,6 @@ def reject_proposal(db: Session, user: User, load_id: int, proposal_id: int) -> 
         company = db.query(Company).filter(Company.id == proposal.company_id).first()
         if company:
             targets.add(company.user_id)
-    if proposal.driver_id:
-        driver = db.query(Driver).filter(Driver.id == proposal.driver_id).first()
-        if driver:
-            targets.add(driver.user_id)
     notifications = [
         create_notification(
             db,

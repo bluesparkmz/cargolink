@@ -691,6 +691,11 @@ class ProposalNegotiationDetailResponse(BaseModel):
     negotiations: list[ProposalNegotiationResponse]
 
 
+class VehicleDriverAssignmentRequest(BaseModel):
+    # Associa ou remove motorista de um camião da empresa.
+    driver_id: int | None = None
+
+
 # ---------------------------------------------------------------------------
 # Viagens
 # ---------------------------------------------------------------------------
